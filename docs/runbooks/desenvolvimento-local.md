@@ -133,6 +133,37 @@ Duas consequências que mordem se você não souber:
 A imagem de contêiner gera dois atalhos, `dist/main.js` e `dist/data-source.js`,
 para que o `CMD` e o Job de migração não precisem conhecer nada disso.
 
+## Medir desempenho sem destruir os dados de demonstração
+
+Um índice só se prova com volume: com três linhas o planejador escolhe varredura
+sequencial e está certo. A tentação é gerar linhas na tabela existente e depois
+apagá-las por algum padrão.
+
+Não faça isso. Escrevendo este runbook, uma varredura de `UPDATE` para variar os
+dados pegou também as três faturas semeadas, e a limpeza seguinte as apagou pelo
+sufixo que o próprio `UPDATE` tinha acabado de adicionar. Dois testes de
+navegador quebraram, e a causa não estava no código.
+
+Use um **tenant sintético**. Todo dado é escopado por `tenant_id`, então a
+limpeza vira uma condição que não tem como alcançar dado real:
+
+```sql
+-- gerar
+INSERT INTO invoices (tenant_id, ...)
+SELECT '11111111-1111-4111-8111-111111111111', ...
+FROM generate_series(1, 60000) g;
+ANALYZE invoices;
+
+-- medir
+EXPLAIN (ANALYZE, COSTS OFF) SELECT ... WHERE tenant_id = '11111111-...';
+
+-- limpar, sem chance de pegar outra coisa
+DELETE FROM invoices WHERE tenant_id = '11111111-1111-4111-8111-111111111111';
+```
+
+Se algo assim já tiver acontecido, `make seed` reconstrói tudo — ele é
+idempotente e absorve colisão em qualquer constraint de unicidade.
+
 ## Recomeçar do zero
 
 ```bash
