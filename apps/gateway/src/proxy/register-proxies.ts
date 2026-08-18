@@ -22,8 +22,15 @@ export function registerProxies(app: INestApplication): void {
     const options: Options = {
       target,
       changeOrigin: true,
-      // The service owns the same prefix, so the path is forwarded verbatim.
-      pathRewrite: undefined,
+
+      // pathFilter, NOT `instance.use(prefix, middleware)`.
+      //
+      // Express strips the mount path from req.url before handing it to the
+      // middleware, so mounting at '/api/financial' would forward '/v1/invoices'
+      // and every request would 404 at the service — which still owns the full
+      // '/api/financial' prefix. Filtering instead of mounting leaves req.url
+      // intact, so the path is forwarded verbatim as intended.
+      pathFilter: `${route.prefix}/**`,
       proxyTimeout: route.timeoutMs ?? 15_000,
       timeout: route.timeoutMs ?? 15_000,
       xfwd: true,
@@ -62,7 +69,7 @@ export function registerProxies(app: INestApplication): void {
       },
     };
 
-    instance.use(route.prefix, createProxyMiddleware(options));
-    log.log(`${route.prefix} -> ${target}`);
+    instance.use(createProxyMiddleware(options));
+    log.log(`${route.prefix}/** -> ${target}`);
   }
 }

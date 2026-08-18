@@ -68,6 +68,24 @@ dev: ## Build and start the whole stack
 web: ## Run shell + the three remotes with hot reload
 	pnpm nx run-many -t serve -p shell mfe-financial mfe-hr mfe-legal --parallel=4
 
+.PHONY: infra
+infra: ## Start only the datastores (postgres, mongo, rabbitmq, minio)
+	$(COMPOSE) up -d postgres mongo rabbitmq minio minio-init
+
+.PHONY: services services-stop services-status
+services: ## Run the five services from dist against the compose datastores
+	@./scripts/dev-native.sh start
+services-stop: ## Stop the natively-run services
+	@./scripts/dev-native.sh stop
+services-status: ## Readiness of the natively-run services
+	@./scripts/dev-native.sh status
+
+.PHONY: up-native
+up-native: infra build services ## Whole stack without building images (fastest inner loop)
+	@echo
+	@echo "  API      http://localhost:3000/api/v1/status"
+	@echo "  Agora rode 'make web' e abra http://localhost:4200"
+
 .PHONY: up down restart logs ps
 up: ## Start the stack without rebuilding
 	$(COMPOSE) up -d

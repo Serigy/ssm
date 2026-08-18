@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PlatformModule, SecretsService, loadConfig } from '@ssm/nest-common';
-import mongoose from 'mongoose';
 import { ContractsModule } from './contracts/contracts.module.js';
 import { CrossModuleConsumer } from './consumers/cross-module.consumer.js';
 
@@ -10,10 +9,18 @@ import { CrossModuleConsumer } from './consumers/cross-module.consumer.js';
     PlatformModule.forRoot({
       serviceName: 'legal-svc',
       checks: {
-        // readyState 1 means connected. Unlike TypeORM, mongoose's default
-        // connection is a module-level singleton, so this really is the
-        // connection the service is using.
-        mongodb: async () => mongoose.connection.readyState === 1,
+        // Resolved from the container, not from `mongoose.connection`.
+        //
+        // MongooseModule.forRoot calls mongoose.createConnection(), which does
+        // NOT populate the global default connection — so the obvious-looking
+        // `mongoose.connection.readyState === 1` observes a connection that was
+        // never opened and reports "down" forever, exactly like importing a
+        // second TypeORM DataSource would.
+        mongodb: async (ref) => {
+          const { getConnectionToken } = await import('@nestjs/mongoose');
+          const conn = ref.get<{ readyState: number }>(getConnectionToken(), { strict: false });
+          return conn?.readyState === 1;
+        },
       },
     }),
     MongooseModule.forRootAsync({

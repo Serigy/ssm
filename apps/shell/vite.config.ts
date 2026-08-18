@@ -19,6 +19,12 @@ export default defineConfig({
     react(),
     federation({
       name: 'shell',
+      // Federated type sharing is off. It publishes an @mf-types.zip from each
+      // remote for the host to download, and every dev boot logs three failures
+      // while it tries. The remotes are typed statically in
+      // apps/shell/src/remote-modules.d.ts instead, which is checked by tsc
+      // rather than fetched over HTTP at dev time.
+      dts: false,
       remotes: {
         financial: { type: 'module', name: 'financial', entry: remoteUrl('financial', 4201) },
         hr: { type: 'module', name: 'hr', entry: remoteUrl('hr', 4202) },

@@ -20,6 +20,12 @@ export default defineConfig({
     federation({
       name: 'hr',
       filename: 'remoteEntry.js',
+      // Federated type sharing is off. It publishes an @mf-types.zip from each
+      // remote for the host to download, and every dev boot logs three failures
+      // while it tries. The remotes are typed statically in
+      // apps/shell/src/remote-modules.d.ts instead, which is checked by tsc
+      // rather than fetched over HTTP at dev time.
+      dts: false,
       exposes: {
         './Module': './src/module.tsx',
       },

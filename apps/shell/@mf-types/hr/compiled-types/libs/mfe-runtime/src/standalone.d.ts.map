@@ -1,0 +1,1 @@
+{"version":3,"file":"standalone.d.ts","sourceRoot":"","sources":["../../../../../../../../libs/mfe-runtime/src/standalone.tsx"],"names":[],"mappings":"AAAA,OAAO,EAAW,KAAK,aAAa,EAAE,MAAM,OAAO,CAAC;AAMpD;;;;;;;;;;;;GAYG;AACH,wBAAgB,cAAc,CAAC,EAC7B,QAAQ,EACR,WAAW,EACX,IAAI,GACL,EAAE;IACD,QAAQ,EAAE,MAAM,CAAC;IACjB,WAAW,EAAE,SAAS,MAAM,EAAE,CAAC;IAC/B,IAAI,EAAE,aAAa,CAAC;CACrB,+BAMA"}
