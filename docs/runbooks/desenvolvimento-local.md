@@ -100,6 +100,38 @@ sincronia, ou o par de chaves foi regenerado enquanto havia sessão aberta.
 serviços reconectam sozinhos a cada 5 segundos; espere meio minuto antes de
 investigar.
 
+## O formato do `dist` de um serviço
+
+Não é `dist/main.js`. É:
+
+```
+apps/financial-svc/dist/
+├── apps/financial-svc/src/main.js      <- o entrypoint
+└── libs/{contracts,nest-common}/src/   <- as libs, compiladas junto
+```
+
+O motivo: cada serviço compila as bibliotecas compartilhadas a partir do
+código-fonte, e o `tsc` enraíza a saída no ancestral comum dos arquivos de
+entrada — que é a raiz do repositório, não a pasta do app.
+
+Duas consequências que mordem se você não souber:
+
+1. **O build tem dois passos.** `nest build` emite `require('@ssm/nest-common')`
+   literalmente; os `paths` do tsconfig são resolução em tempo de compilação e
+   não reescrevem o especificador emitido. Em execução isso resolveria para o
+   *código-fonte* TypeScript da lib, que o Node não roda. Por isso o alvo de
+   build é `nest build && tsc-alias`, que reescreve para caminhos relativos
+   dentro de `dist/libs/`.
+
+2. **As dependências da lib são dependências do serviço.** Como o arquivo
+   compilado da lib mora sob o `dist` do serviço, `require('pino')` resolve a
+   partir dali — ou seja, de `apps/<svc>/node_modules`. É por isso que `pino`,
+   `amqplib`, `jose` e companhia estão declarados em cada serviço, e não só em
+   `libs/nest-common`.
+
+A imagem de contêiner gera dois atalhos, `dist/main.js` e `dist/data-source.js`,
+para que o `CMD` e o Job de migração não precisem conhecer nada disso.
+
 ## Recomeçar do zero
 
 ```bash

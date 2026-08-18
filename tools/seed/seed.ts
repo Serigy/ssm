@@ -1,10 +1,15 @@
 /**
  * Loads the demo dataset.
  *
- * Idempotent: every insert is keyed on a fixed UUID and uses ON CONFLICT DO
- * NOTHING, so running it twice changes nothing and running it against a
- * half-seeded database completes it. That matters because the most common time
- * to run a seed is after something went wrong.
+ * Idempotent: every insert is keyed on a fixed UUID and uses a bare
+ * ON CONFLICT DO NOTHING — bare, with no conflict target, so it absorbs a
+ * collision on ANY unique constraint rather than only the primary key. Naming
+ * (id) would still explode on the per-tenant invoice number the moment the
+ * database already had a FAT-2026-00001 in it, which is exactly the state a
+ * second run finds.
+ *
+ * That matters because the most common time to run a seed is after something
+ * went wrong.
  *
  *   make seed
  */
@@ -65,7 +70,7 @@ async function seedIdentity(): Promise<void> {
       await c.query(
         `INSERT INTO users (id, tenant_id, email, password_hash, display_name, status, roles)
          VALUES ($1, $2, $3, $4, $5, 'active', $6)
-         ON CONFLICT (id) DO NOTHING`,
+         ON CONFLICT DO NOTHING`,
         [id, TENANT, email, hash, name, roles],
       );
     }
@@ -92,7 +97,7 @@ async function seedFinancial(): Promise<void> {
             issue_date, due_date, currency, subtotal_minor, tax_total_minor,
             total_minor, amount_paid_minor, created_by, updated_by)
          VALUES ($1,$2,$3,$4,gen_random_uuid(),$5,$6,$7,'BRL',$8,0,$8,$9,$10,$10)
-         ON CONFLICT (id) DO NOTHING`,
+         ON CONFLICT DO NOTHING`,
         [inv.id, TENANT, inv.number, inv.status, inv.name, issueDate, inv.due,
          inv.total, inv.paid, USERS.controller],
       );
@@ -102,7 +107,7 @@ async function seedFinancial(): Promise<void> {
            (invoice_id, position, description, quantity_milli, unit_price_minor,
             tax_rate_bps, line_total_minor)
          VALUES ($1, 0, $2, 1000, $3, 0, $3)
-         ON CONFLICT (invoice_id, position) DO NOTHING`,
+         ON CONFLICT DO NOTHING`,
         [inv.id, 'Sustentação de ambiente — mensalidade', inv.total],
       );
     }
@@ -115,7 +120,7 @@ async function seedHr(): Promise<void> {
     const dept = 'b0000000-0000-4000-8000-0000000000d1';
     await c.query(
       `INSERT INTO departments (id, tenant_id, name, created_by, updated_by)
-       VALUES ($1, $2, 'Tecnologia', $3, $3) ON CONFLICT (id) DO NOTHING`,
+       VALUES ($1, $2, 'Tecnologia', $3, $3) ON CONFLICT DO NOTHING`,
       [dept, TENANT, USERS.hrManager],
     );
 
@@ -138,7 +143,7 @@ async function seedHr(): Promise<void> {
             status, contract_type, job_title, department_id, start_date,
             salary_minor, salary_currency, created_by, updated_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,'permanent',$8,$9,$10,$11,'BRL',$12,$12)
-         ON CONFLICT (id) DO NOTHING`,
+         ON CONFLICT DO NOTHING`,
         [e.id, TENANT, e.num, e.first, e.last,
          `${e.first.toLowerCase()}.${e.last.toLowerCase()}@serigy.local`,
          e.status, e.title, dept, e.start, e.salary, USERS.hrManager],
