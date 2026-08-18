@@ -132,3 +132,9 @@ temp/
 # --- Generated local config ----------------------------------------------
 # Derived from secrets/local/ by scripts/gen-secrets.sh.
 deploy/local/generated/
+
+# --- Playwright ----------------------------------------------------------
+test-results/
+playwright-report/
+blob-report/
+.playwright/

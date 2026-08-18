@@ -40,9 +40,17 @@ export default defineConfig({
         react: { singleton: true, requiredVersion: '^19.1.0' },
         'react-dom': { singleton: true, requiredVersion: '^19.1.0' },
         'react-router-dom': { singleton: true, requiredVersion: '^7.5.2' },
-        '@ssm/ui-kit': { singleton: true },
-        '@ssm/mfe-runtime': { singleton: true },
-        '@ssm/contracts': { singleton: true },
+        // The @ssm/* workspace libraries are deliberately NOT listed here.
+        //
+        // They are symlinked to their TypeScript source, so each dev server
+        // serves its own copy over /@fs/ and the share scope never sees them.
+        // Declaring `singleton: true` on a package that cannot be shared does
+        // not make it one — it only makes the duplicate-module failure look
+        // like a federation bug instead of what it is.
+        //
+        // Anything that must be one instance across the boundary is passed
+        // explicitly instead: host services go to the module Root as props.
+        // React and the router below are real npm packages and DO share.
       },
     }),
   ],

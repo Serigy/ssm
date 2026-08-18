@@ -1,11 +1,19 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { AppShell, Badge, Button, EmptyState, LoadingBar, useToast, type NavItem } from '@ssm/ui-kit';
+import {
+  AppShell,
+  Badge,
+  Button,
+  EmptyState,
+  LoadingBar,
+  useToast,
+  type NavItem,
+} from '@ssm/ui-kit';
 import { HostProvider, RemoteSlot, type HostServices } from '@ssm/mfe-runtime';
 import { LoginScreen } from './auth/LoginScreen.js';
 import { useSession } from './auth/useSession.js';
 import { Dashboard } from './layout/Dashboard.js';
-import { REMOTES, lazyRoot } from './remotes.js';
+import { REMOTES } from './remotes.js';
 
 export function App() {
   const { status, session, api, signIn, signOut } = useSession();
@@ -95,7 +103,10 @@ export function App() {
             shell knowing any of them.
           */}
           {visibleRemotes.map((remote) => {
-            const Root = lazyRoot(remote);
+            // Root comes from the descriptor and is stable across renders —
+            // see the note on RemoteDescriptor.Root. Creating it here instead
+            // would re-suspend the module on every render of this component.
+            const Root = remote.Root;
             return (
               <Route
                 key={remote.id}
@@ -104,7 +115,14 @@ export function App() {
                   // One boundary per module: a remote that fails to load takes
                   // only its own pane down, not the whole application.
                   <RemoteSlot moduleId={remote.id}>
-                    <Root />
+                    {/*
+                      Services go across as props, not through context. The
+                      remote has its own copy of @ssm/mfe-runtime — and so its
+                      own HostContext object — because a source-linked workspace
+                      package cannot be shared through the federation scope.
+                      See RemoteRootProps in libs/mfe-runtime.
+                    */}
+                    <Root services={host} />
                   </RemoteSlot>
                 }
               />

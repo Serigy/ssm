@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { loginRequestSchema, type Session, type TokenPair } from '@ssm/contracts';
+import { UnauthorizedException } from '@nestjs/common';
 import {
   CurrentUser,
   Public,
@@ -70,7 +71,11 @@ export class AuthController {
     const token = (req.cookies as Record<string, string> | undefined)?.[REFRESH_COOKIE];
     if (!token) {
       this.clearRefreshCookie(res);
-      throw new Error('Sessão ausente.');
+      // 401, not a bare Error. The shell calls this on every page load to try a
+      // silent sign-in, so "no cookie" is the ordinary state of an anonymous
+      // visitor — not a server fault. Throwing a plain Error made every such
+      // load a 500 in the logs, which is how people learn to ignore 500s.
+      throw new UnauthorizedException('Sessão ausente. Entre novamente.');
     }
 
     const pair = await this.auth.refresh(token, {

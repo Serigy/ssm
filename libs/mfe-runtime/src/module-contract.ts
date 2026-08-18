@@ -1,5 +1,29 @@
 import type { ComponentType } from 'react';
 import type { Permission } from '@ssm/contracts';
+import type { HostServices } from './host-context.js';
+
+/**
+ * Props the shell passes to a module's root component.
+ *
+ * The services are handed over EXPLICITLY, as props, rather than being read
+ * from React context across the federation boundary. That is not a style
+ * preference — it is the only arrangement that works:
+ *
+ * A workspace library linked to its TypeScript source is not resolvable
+ * through Module Federation's share scope. The host serves its copy of
+ * @ssm/mfe-runtime from its own dev server and the remote serves another from
+ * its own, so `createContext()` runs twice and produces two distinct context
+ * objects. The shell's <HostProvider> writes to one; the remote's useHost()
+ * reads from the other and finds nothing. Declaring `singleton: true` on such
+ * a package does not fix it, it just makes the failure surprising.
+ *
+ * Passing the services as props sidesteps module identity entirely. The remote
+ * re-provides them through ITS OWN copy of the context, which is by definition
+ * the same copy its own screens read from.
+ */
+export interface RemoteRootProps {
+  services: HostServices;
+}
 
 /**
  * The contract between the shell and every remote.
@@ -21,11 +45,16 @@ export interface SsmModuleDefinition {
   /** Mount path owned by this module, e.g. "/financial". */
   basePath: string;
   /**
-   * The module's root component. It renders its own routes *relative* to
-   * basePath, using the router instance the shell passes down — one router for
-   * the whole app, so the back button behaves.
+   * The module's root component.
+   *
+   * It receives the host services as props and MUST re-provide them through
+   * its own <HostProvider> before rendering anything that calls useHost() —
+   * see RemoteRootProps for why that indirection is load-bearing.
+   *
+   * It renders its own routes relative to basePath, on the router instance the
+   * shell owns, so there is one history stack and the back button behaves.
    */
-  Root: ComponentType;
+  Root: ComponentType<RemoteRootProps>;
   /**
    * Sidebar entries this module contributes. The shell filters them by the
    * user's permissions before rendering, so a module never has to.

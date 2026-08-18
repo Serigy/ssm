@@ -41,6 +41,36 @@ export class RemoteBoundary extends Component<Props, State> {
             seguem disponíveis. Recarregue a página; se o erro continuar, informe a equipe de
             plantão.
           </div>
+
+          {/*
+            The technical cause, in development only. A federated remote fails
+            for reasons the friendly message cannot express — a version mismatch
+            on a shared singleton, a chunk 404 mid-rollout, a CORS refusal — and
+            hiding it behind "não respondeu" means the developer has to open the
+            console to learn anything. In production it stays hidden: the message
+            would leak build internals to a user who cannot act on them.
+          */}
+          {import.meta.env.DEV && (
+            <pre
+              style={{
+                maxWidth: '80ch',
+                whiteSpace: 'pre-wrap',
+                textAlign: 'left',
+                fontSize: 'var(--text-2xs)',
+                color: 'var(--state-danger)',
+                background: 'var(--state-danger-bg)',
+                border: '1px solid var(--state-danger)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-4)',
+                margin: 0,
+                overflowX: 'auto',
+              }}
+            >
+              {this.state.error.name}: {this.state.error.message}
+              {this.state.error.stack ? `\n\n${this.state.error.stack}` : ''}
+            </pre>
+          )}
+
           <button
             type="button"
             className="ssm-btn ssm-btn--secondary ssm-btn--md"

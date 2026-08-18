@@ -3,6 +3,7 @@ import { BrowserRouter, useNavigate } from 'react-router-dom';
 import type { Session } from '@ssm/contracts';
 import { ApiClient } from './api-client.js';
 import { HostProvider, type HostServices } from './host-context.js';
+import type { RemoteRootProps } from './module-contract.js';
 
 /**
  * Host stub for running one remote on its own during development.
@@ -24,7 +25,7 @@ export function StandaloneHost({
 }: {
   moduleId: string;
   permissions: readonly string[];
-  Root: ComponentType;
+  Root: ComponentType<RemoteRootProps>;
 }) {
   return (
     <BrowserRouter>
@@ -40,7 +41,7 @@ function Inner({
 }: {
   moduleId: string;
   permissions: readonly string[];
-  Root: ComponentType;
+  Root: ComponentType<RemoteRootProps>;
 }) {
   const navigate = useNavigate();
 
@@ -88,6 +89,9 @@ function Inner({
     };
   }, [moduleId, permissions, navigate]);
 
+  // Standalone provides the context too, because a remote run on its own is
+  // not inside the shell's provider — but the Root still re-provides from its
+  // own copy, exactly as it does under federation.
   return (
     <HostProvider value={host}>
       <div className="ssm-shell">
@@ -101,7 +105,7 @@ function Inner({
             </div>
           </header>
           <main className="ssm-content">
-            <Root />
+            <Root services={host} />
           </main>
         </div>
       </div>

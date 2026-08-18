@@ -165,6 +165,22 @@ build: ## Build every project
 	pnpm nx run-many -t build
 check: lint typecheck test ## Everything CI runs on a pull request
 
+.PHONY: e2e
+e2e: ## End-to-end no navegador (exige a stack de pé: infra + services + web)
+	pnpm playwright test
+
+.PHONY: e2e-ui
+e2e-ui: ## E2E em modo interativo
+	pnpm playwright test --ui
+
+.PHONY: web-start web-stop web-status
+web-start: ## Sobe os quatro dev servers em segundo plano
+	@./scripts/dev-web.sh start
+web-stop: ## Derruba os dev servers (mata pela porta, não pelo PID)
+	@./scripts/dev-web.sh stop
+web-status: ## Estado dos dev servers
+	@./scripts/dev-web.sh status
+
 .PHONY: affected
 affected: ## Run the checks only for projects touched since main
 	pnpm nx affected -t lint,typecheck,test,build

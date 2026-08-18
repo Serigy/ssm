@@ -87,6 +87,56 @@ Por isso o `make web-images` passa `PUBLIC_PATH` explicitamente e o
 cache aponta para hashes que não existem mais, e essa é a falha clássica de
 micro-frontend depois de um deploy.
 
+## Três armadilhas que custam uma tarde cada
+
+Todas as três já morderam este repositório. Nenhuma é pega por typecheck, teste
+unitário ou `curl` — só por um teste no navegador que verifica se o conteúdo
+está **visível**. É o que `e2e/shell.spec.ts` faz.
+
+### 1. Biblioteca de workspace não é singleton federado
+
+`@ssm/mfe-runtime` está ligada por symlink ao próprio código-fonte. O host serve
+a cópia dele pelo próprio dev server e o remote serve outra pelo dele, então
+`createContext()` roda duas vezes e produz dois objetos distintos. O
+`<HostProvider>` do shell escreve em um; o `useHost()` do remote lê do outro e
+não acha nada.
+
+Declarar `singleton: true` numa dependência assim **não** resolve — só faz a
+falha parecer um bug de federação.
+
+A saída é não depender de identidade de módulo: os serviços do host atravessam
+a fronteira **como props**, e o remote os re-provê pela sua própria cópia do
+contexto. Ver `RemoteRootProps` em `libs/mfe-runtime`.
+
+### 2. A fronteira assíncrona precisa ser explícita
+
+O escopo de módulos compartilhados é inicializado de forma assíncrona, então o
+entry point só pode fazer uma coisa: importar dinamicamente o entry real. Por
+isso todo app tem um `main.tsx` de uma linha e um `bootstrap.tsx` com o resto.
+
+Se você não declarar, o plugin infere onde a fronteira fica e reescreve *aquele*
+módulo num bootstrap assíncrono. Quando ele escolhe um módulo com exports
+nomeados, os exports somem e você recebe
+`does not provide an export named 'App'` em tempo de execução.
+
+### 3. `React.lazy()` fora do render, sempre
+
+`lazy()` devolve um **tipo de componente novo** a cada chamada, e o React
+identifica um Suspense pela identidade do componente. Chamar `lazy()` durante o
+render cria um tipo novo a cada passagem: o React desmonta a árvore já
+resolvida e suspende de novo, imediatamente.
+
+O sintoma é traiçoeiro. O módulo *realmente* monta, roda os efeitos, atualiza o
+título da topbar e busca os dados — e a tela fica em branco, porque o React
+marca a subárvore já renderizada com `display: none !important` enquanto espera
+o componente "novo".
+
+E vira laço no instante em que o módulo chama `setPageTitle()` num efeito, já
+que isso re-renderiza o shell, que cria outro `lazy()`.
+
+Os `lazy()` são criados uma única vez, no escopo do módulo, em
+`apps/shell/src/remotes.ts`.
+
 ## Rodando um remote isolado
 
 ```bash
