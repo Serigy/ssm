@@ -60,8 +60,15 @@ export class EmployeesService {
     if (filter.departmentId) qb.andWhere('e.departmentId = :dep', { dep: filter.departmentId });
     if (filter.managerId) qb.andWhere('e.managerId = :mgr', { mgr: filter.managerId });
     if (filter.q) {
+      // Must match employees_search_trgm_idx exactly — see the note in
+      // financial-svc's InvoicesService.list.
       qb.andWhere(
-        '(e.firstName ILIKE :q OR e.lastName ILIKE :q OR e.workEmail ILIKE :q OR e.employeeNumber ILIKE :q)',
+        `(
+          coalesce(e.first_name, '') || ' ' ||
+          coalesce(e.last_name, '') || ' ' ||
+          coalesce(e.work_email, '') || ' ' ||
+          coalesce(e.employee_number, '')
+        ) ILIKE :q`,
         { q: `%${filter.q}%` },
       );
     }

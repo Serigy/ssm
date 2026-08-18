@@ -113,6 +113,19 @@ formulário de emissão, que os mostra enquanto a pessoa digita. Uma segunda
 implementação no front acabaria arredondando diferente, e a prévia passaria a
 divergir da fatura emitida — por um centavo, que aqui é falha de conciliação.
 
+## Busca
+
+A listagem filtra por número e contraparte com `ILIKE '%termo%'`. O curinga à
+esquerda impede um B-tree, então existe um índice GIN de trigramas sobre a
+concatenação das duas colunas, com `tenant_id` à frente
+(`invoices_search_trgm_idx`).
+
+A consulta em `InvoicesService.list` precisa usar **exatamente** a mesma
+expressão do índice, ou o planejador volta à varredura sequencial sem avisar. Os
+dois andam juntos — ver [ADR 0010](../adr/0010-cache-e-busca.md).
+
+Termos com menos de três caracteres não aproveitam trigramas.
+
 ## Pendente
 
 - Renderização do PDF (hoje `documentKey` é sempre nulo)

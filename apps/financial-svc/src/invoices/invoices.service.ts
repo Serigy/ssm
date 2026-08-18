@@ -75,9 +75,17 @@ export class InvoicesService {
     if (filter.dueBefore) qb.andWhere('i.dueDate <= :before', { before: filter.dueBefore });
     if (filter.dueAfter) qb.andWhere('i.dueDate >= :after', { after: filter.dueAfter });
     if (filter.q) {
-      // Parameterised — never string-concatenated. Zen would flag it, but the
-      // right answer is not to write it in the first place.
-      qb.andWhere('(i.number ILIKE :q OR i.counterpartyName ILIKE :q)', { q: `%${filter.q}%` });
+      // The expression must match invoices_search_trgm_idx character for
+      // character, or the planner will not use the index and the search falls
+      // back to a full scan. Index and query are one decision, made in
+      // apps/financial-svc/src/database/migrations/1747100000000.
+      //
+      // The value is parameterised — never concatenated into the SQL. Zen would
+      // flag the alternative, but the right answer is not to write it.
+      qb.andWhere(
+        `(coalesce(i.number, '') || ' ' || coalesce(i.counterparty_name, '')) ILIKE :q`,
+        { q: `%${filter.q}%` },
+      );
     }
 
     // Keyset pagination on (created_at, id): stable under concurrent inserts,

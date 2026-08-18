@@ -1,6 +1,6 @@
 # 0010 — Redis como coordenação, não como cache de leitura; sem Elasticsearch e sem IndexedDB
 
-- **Estado:** Aceita (Redis implantado; `pg_trgm` pendente)
+- **Estado:** Aceita (implantada)
 - **Data:** 2026-08-18
 
 ## Contexto
@@ -80,12 +80,23 @@ sozinho:
 
 ```sql
 CREATE EXTENSION pg_trgm;
-CREATE INDEX invoices_search_idx ON invoices
-  USING gin ((number || ' ' || counterparty_name) gin_trgm_ops);
+CREATE EXTENSION btree_gin;
+CREATE INDEX invoices_search_trgm_idx ON invoices USING gin (
+  tenant_id,
+  (coalesce(number, '') || ' ' || coalesce(counterparty_name, '')) gin_trgm_ops
+);
 ```
 
-Isso torna `ILIKE '%termo%'` indexado, aceita erro de digitação por similaridade,
-e custa uma migração. O Jurídico já usa o índice de texto ponderado do MongoDB,
+Isso torna `ILIKE '%termo%'` indexado e custa uma migração. Medido em 60 mil
+linhas com termo seletivo: **52 ms de varredura sequencial contra 4 ms de
+bitmap index scan**.
+
+A forma importa, e a primeira tentativa estava errada: indexar as colunas
+separadamente dentro de um GIN multicoluna não funciona, porque um GIN
+multicoluna responde `a AND b` enquanto a consulta pergunta `a OR b` — o
+planejador manteve a varredura sequencial, corretamente. Indexar a
+**concatenação** transforma o OR em um predicado único. A consulta no serviço
+precisa usar a expressão idêntica; índice e query são uma decisão só. O Jurídico já usa o índice de texto ponderado do MongoDB,
 que serve bem um corpus jurídico onde a busca é por termo inteiro.
 
 O que pesa contra o Elasticsearch aqui não é principalmente o custo operacional

@@ -19,6 +19,7 @@ vai lembrar se a opção óbvia foi considerada.
 | [0008](0008-zod-como-contrato.md) | Zod como fonte única de esquema | Aceita |
 | [0009](0009-aikido-zen.md) | Aikido Zen como firewall em aplicação | Aceita |
 | [0010](0010-cache-e-busca.md) | Redis como coordenação; sem Elasticsearch e sem IndexedDB | Aceita |
+| [0011](0011-passport-na-fronteira-de-login.md) | Passport na fronteira de login, não no acesso a recurso | **Proposta** |
 
 ## Formato
 

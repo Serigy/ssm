@@ -102,6 +102,12 @@ por serviços sem permissão para os campos sensíveis, e fica retido no broker.
 | `hr:payroll:read` | **Ver salário e dado pessoal** |
 | `hr:payroll:approve` | Aprovar folha |
 
+## Busca
+
+Mesmo desenho do módulo Financeiro: índice GIN de trigramas sobre a concatenação
+de nome, sobrenome, e-mail corporativo e matrícula, com `tenant_id` à frente
+(`employees_search_trgm_idx`). A consulta precisa repetir a expressão do índice.
+
 ## Pendente
 
 - Edição de cadastro pela interface (a API já aceita `PUT`)
