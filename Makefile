@@ -70,7 +70,7 @@ web: ## Run shell + the three remotes with hot reload
 
 .PHONY: infra
 infra: ## Start only the datastores (postgres, mongo, rabbitmq, minio)
-	$(COMPOSE) up -d postgres mongo rabbitmq minio minio-init
+	$(COMPOSE) up -d postgres mongo rabbitmq redis minio minio-init
 
 .PHONY: services services-stop services-status
 services: ## Run the five services from dist against the compose datastores
@@ -142,6 +142,10 @@ migrate-local: ## Run migrations from the host against the compose databases
 .PHONY: seed
 seed: ## Load the demo dataset (idempotent)
 	pnpm tsx tools/seed/seed.ts
+
+.PHONY: redis-cli
+redis-cli: ## Abre um redis-cli autenticado
+	$(COMPOSE) exec redis sh -c 'redis-cli -a "$$(cat /run/secrets/redis_password)"'
 
 .PHONY: psql
 psql: ## Open psql (DB=ssm_financial by default)

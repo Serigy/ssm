@@ -29,6 +29,22 @@ export const appConfigSchema = z.object({
   MONGO_USER: z.string().default('ssm'),
   MONGO_DB: z.string().default('ssm'),
 
+  /**
+   * Redis holds coordination state only — rate-limit counters, idempotency
+   * keys, the token denylist. Nothing whose source of truth lives elsewhere;
+   * see docs/adr/0010-cache-e-busca.md.
+   */
+  REDIS_HOST: z.string().default('redis'),
+  REDIS_PORT: z.coerce.number().int().default(6379),
+  REDIS_DB: z.coerce.number().int().min(0).max(15).default(0),
+  /**
+   * Turning this off makes every Redis-backed control degrade to its
+   * single-process behaviour. Useful for a developer running one service by
+   * hand; never correct in a cluster, where it silently restores the
+   * per-replica rate-limit bug this exists to fix.
+   */
+  REDIS_ENABLED: z.coerce.boolean().default(true),
+
   RABBITMQ_HOST: z.string().default('rabbitmq'),
   RABBITMQ_PORT: z.coerce.number().int().default(5672),
   RABBITMQ_USER: z.string().default('ssm'),

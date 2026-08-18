@@ -17,6 +17,7 @@ export SSM_SECRETS_DIR="$ROOT/secrets/local"
 export POSTGRES_HOST=localhost POSTGRES_PORT=5433 POSTGRES_USER=ssm
 export MONGO_HOST=localhost   MONGO_PORT=27018   MONGO_USER=ssm
 export RABBITMQ_HOST=localhost RABBITMQ_PORT=5672 RABBITMQ_USER=ssm
+export REDIS_HOST=localhost REDIS_PORT=6380 REDIS_ENABLED=true
 export R2_ENDPOINT=http://localhost:9000 R2_BUCKET=ssm-documents
 export JWT_ISSUER=https://identity.ssm.local JWT_AUDIENCE=ssm
 export NODE_ENV=development LOG_PRETTY=true LOG_LEVEL=info

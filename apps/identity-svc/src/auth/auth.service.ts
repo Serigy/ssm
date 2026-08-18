@@ -7,7 +7,7 @@ import {
   type Session,
   type TokenPair,
 } from '@ssm/contracts';
-import { JwtService, type AppConfig } from '@ssm/nest-common';
+import { JwtService, TokenDenylistService, type AppConfig } from '@ssm/nest-common';
 import * as argon2 from 'argon2';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { DataSource } from 'typeorm';
@@ -37,6 +37,7 @@ export class AuthService {
     @InjectDataSource() private readonly db: DataSource,
     private readonly jwt: JwtService,
     private readonly cfg: AppConfig,
+    private readonly denylist: TokenDenylistService,
   ) {}
 
   async login(
@@ -102,6 +103,8 @@ export class AuthService {
           `${stored.userId}). Revogando a família inteira.`,
       );
       await repo.update({ familyId: stored.familyId }, { revokedAt: new Date() });
+      // The refresh token leaked, so assume the access token did too.
+      await this.denylist.revokeUserBefore(stored.userId, this.cfg.ACCESS_TOKEN_TTL_SECONDS);
       throw new UnauthorizedException(
         'Esta sessão foi encerrada por segurança. Entre novamente.',
       );
@@ -121,15 +124,38 @@ export class AuthService {
     return this.issuePair(user, stored.familyId, meta);
   }
 
-  /** Revokes the whole family, so every device from that login is signed out. */
+  /**
+   * Revokes the whole family, so every device from that login is signed out.
+   *
+   * Revoking the refresh family alone is not enough: the access token already
+   * in the browser's memory keeps working until it expires. The denylist closes
+   * that window, which is the entire reason a user who clicks "Sair" after
+   * losing a laptop expects the session to actually end.
+   */
   async logout(rawToken: string): Promise<void> {
     const stored = await this.db
       .getRepository(RefreshTokenEntity)
       .findOne({ where: { tokenHash: sha256(rawToken) } });
     if (!stored) return;
+
     await this.db
       .getRepository(RefreshTokenEntity)
       .update({ familyId: stored.familyId }, { revokedAt: new Date() });
+
+    await this.denylist.revokeUserBefore(stored.userId, this.cfg.ACCESS_TOKEN_TTL_SECONDS);
+  }
+
+  /**
+   * Called when a user's roles or status change.
+   *
+   * Permissions are baked into the access token (ADR 0002), so a role edit
+   * would otherwise take effect only at the next refresh — up to 15 minutes of
+   * a demoted user keeping the access they just lost. Burning their tokens
+   * forces a refresh, which re-reads the roles from the database.
+   */
+  async invalidateSessions(userId: string): Promise<void> {
+    await this.denylist.revokeUserBefore(userId, this.cfg.ACCESS_TOKEN_TTL_SECONDS);
+    this.log.log(`Sessões de ${userId} invalidadas após mudança de papel ou situação.`);
   }
 
   async session(userId: string): Promise<Session> {

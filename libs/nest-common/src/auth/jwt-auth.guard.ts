@@ -9,6 +9,8 @@ import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { setContextActor } from '../http/correlation.middleware.js';
 import { tagZenUser } from '../security/zen.js';
+import { CHECK_REVOCATION_KEY } from '../redis/decorators.js';
+import { TokenDenylistService } from '../redis/token-denylist.service.js';
 import { PUBLIC_KEY, type AuthenticatedUser } from './decorators.js';
 import { JwtService } from './jwt.service.js';
 
@@ -26,6 +28,7 @@ export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly reflector: Reflector,
+    private readonly denylist: TokenDenylistService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -43,6 +46,23 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const claims = await this.jwt.verify(header.slice(7));
+
+      // Signature and expiry are checked offline; revocation is not, so it
+      // costs a Redis round trip and is therefore paid only where it matters:
+      // every mutating request, plus routes that ask for it. See
+      // TokenDenylistService.shouldCheck for the reasoning and the residual risk.
+      const explicit = Boolean(
+        this.reflector.getAllAndOverride<boolean>(CHECK_REVOCATION_KEY, [
+          ctx.getHandler(),
+          ctx.getClass(),
+        ]),
+      );
+      if (TokenDenylistService.shouldCheck(req.method, explicit)) {
+        if (await this.denylist.isRevoked(claims)) {
+          throw new UnauthorizedException('Esta sessão foi revogada. Entre novamente.');
+        }
+      }
+
       const user: AuthenticatedUser = {
         id: claims.sub,
         tenantId: claims.tid,
@@ -60,6 +80,9 @@ export class JwtAuthGuard implements CanActivate {
       tagZenUser(user.id, user.email);
       return true;
     } catch (err) {
+      // A revocation rejection carries its own message and must reach the
+      // client intact; only verification failures collapse into the generic one.
+      if (err instanceof UnauthorizedException) throw err;
       this.log.debug(`Token rejected: ${(err as Error).message}`);
       throw new UnauthorizedException('Invalid or expired token');
     }

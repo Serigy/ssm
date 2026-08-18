@@ -16,6 +16,7 @@
 | Zen (Aikido) | firewall em aplicação, bloqueio por ator autenticado |
 | `JwtAuthGuard` | verificação RS256 offline; global, opt-out por escrito |
 | `PermissionsGuard` | `módulo:recurso:ação`, avaliado a partir do token |
+| Redis | contadores de limite compartilhados, idempotência, denylist de token |
 | Camada de dados | `tenantId` como primeiro predicado; constraints CHECK |
 | NetworkPolicy | serviços de módulo só aceitam tráfego do gateway |
 | Contêiner | não-root, raiz somente leitura, todas as capabilities descartadas |
@@ -28,7 +29,8 @@ Registrada aqui porque dívida de segurança não documentada é dívida esqueci
 | Item | Impacto | Plano |
 |---|---|---|
 | `JwtService` carrega uma única chave pública | Rotação do par de chaves exige janela de manutenção | Suportar duas chaves simultâneas |
-| Sem denylist de token para revogação imediata | Uma mudança de papel leva até 15 min (TTL do access token) para valer | Denylist por `jti` no identity-svc, consultada só em operações críticas |
+| Leitura comum não verifica revogação | Um token revogado ainda lê por até 15 min (TTL). Escritas e leituras sensíveis são verificadas | Aceito — ver [ADR 0010](../adr/0010-cache-e-busca.md); verificar toda leitura anularia a autorização offline |
+| Redis é ponto único para os controles | Se cair, limite de requisições volta a contar por réplica e a revogação espera o TTL | HA em produção; o sistema segue servindo e alarma |
 | Expurgo do `outbox` não implementado | A tabela cresce indefinidamente | CronJob de expurgo das linhas publicadas há mais de 30 dias |
 | Job de recifragem de PII não escrito | Rotação da chave de PII não é executável | Escrever antes da primeira rotação programada |
 | Sem trilha de auditoria dedicada | Quem leu o quê não é reconstruível além dos logs | Tabela de auditoria em append-only por serviço |

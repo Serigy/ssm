@@ -16,7 +16,7 @@ export const legalApi = {
   get: (api: ApiClient, id: string) => api.get<Contract>(`${BASE}/${id}`),
   create: (api: ApiClient, dto: CreateContract) => api.post<Contract>(BASE, dto),
   transition: (api: ApiClient, id: string, status: ContractStatus) =>
-    api.post<Contract>(`${BASE}/${id}/status`, { status }),
+    api.post<Contract>(`${BASE}/${id}/status`, { status }, `status:${id}:${status}`),
   expiring: (api: ApiClient, withinDays = 60) =>
     api.get<Contract[]>(`${BASE}/expiring?withinDays=${withinDays}`),
   documentUrl: (api: ApiClient, id: string) => api.get<DocumentTicket>(`${BASE}/${id}/document`),

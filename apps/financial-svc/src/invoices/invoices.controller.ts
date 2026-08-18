@@ -18,7 +18,14 @@ import {
   type Invoice,
   type Page,
 } from '@ssm/contracts';
-import { CurrentUser, RequirePermissions, TenantId, ZodValidationPipe } from '@ssm/nest-common';
+import {
+  CurrentUser,
+  CheckRevocation,
+  Idempotent,
+  RequirePermissions,
+  TenantId,
+  ZodValidationPipe,
+} from '@ssm/nest-common';
 import {
   CreateInvoiceDto,
   InvoiceDto,
@@ -97,6 +104,10 @@ export class InvoicesController {
 
   @Post(':id/issue')
   @HttpCode(200)
+  // A repeat assigns a second legal document number, or would if the state
+  // machine let it. Idempotency turns the retry into a replay of the original
+  // answer rather than a 409 the client has to interpret.
+  @Idempotent()
   // Issuing assigns a legal document number and is irreversible — a stricter
   // permission than editing a draft.
   @RequirePermissions('financial:invoice:approve')
@@ -116,6 +127,9 @@ export class InvoicesController {
 
   @Post(':id/payments')
   @HttpCode(200)
+  // The reason this exists at all: a lost response on a payment must not
+  // become a second payment when the client retries.
+  @Idempotent()
   @RequirePermissions('financial:invoice:update')
   @ApiOperation({ summary: 'Registra um pagamento, total ou parcial' })
   recordPayment(
@@ -129,6 +143,7 @@ export class InvoicesController {
 
   @Post(':id/void')
   @HttpCode(200)
+  @Idempotent()
   @RequirePermissions('financial:invoice:approve')
   @ApiOperation({
     summary: 'Cancela a fatura',
@@ -145,6 +160,9 @@ export class InvoicesController {
 
   @Get(':id/document')
   @RequirePermissions('financial:invoice:read')
+  // Mints a presigned R2 URL that outlives the request and works without any
+  // token at all. A revoked session must not be able to walk away with one.
+  @CheckRevocation()
   @ApiOperation({
     summary: 'Emite um link temporário para o PDF',
     description:

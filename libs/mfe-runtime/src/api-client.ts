@@ -46,6 +46,7 @@ export class ApiClient {
     path: string,
     body?: unknown,
     init: RequestInit = {},
+    idempotencyKey?: string,
   ): Promise<T> {
     const token = await this.opts.getToken();
 
@@ -55,6 +56,28 @@ export class ApiClient {
     if (token) headers.set('Authorization', `Bearer ${token}`);
     // Lets a browser-side failure be found in the server logs.
     headers.set('X-Correlation-Id', crypto.randomUUID());
+
+    /**
+     * Idempotency key on every mutating request.
+     *
+     * Two kinds of key, and the difference matters:
+     *
+     *  - A caller-supplied key expresses "this is the same operation however
+     *    many times it is attempted": issuing invoice X, activating employee Y.
+     *    Clicking twice replays the first answer instead of erroring.
+     *
+     *  - The generated fallback is unique per call. It cannot dedupe a user
+     *    clicking twice — those are two calls — but it does protect against the
+     *    same HTTP request being delivered twice by a proxy or a browser
+     *    resend, which is the case the server cannot otherwise distinguish
+     *    from a genuine second request.
+     *
+     * Sending one unconditionally also means an endpoint that gains
+     * @Idempotent() later does not suddenly start rejecting this client.
+     */
+    if (method !== 'GET' && method !== 'HEAD') {
+      headers.set('Idempotency-Key', idempotencyKey ?? crypto.randomUUID());
+    }
 
     const res = await fetch(`${this.opts.baseUrl}${path}`, {
       ...init,
@@ -96,17 +119,17 @@ export class ApiClient {
   get<T>(path: string): Promise<T> {
     return this.request<T>('GET', path);
   }
-  post<T>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>('POST', path, body);
+  post<T>(path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
+    return this.request<T>('POST', path, body, {}, idempotencyKey);
   }
-  put<T>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>('PUT', path, body);
+  put<T>(path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
+    return this.request<T>('PUT', path, body, {}, idempotencyKey);
   }
-  patch<T>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>('PATCH', path, body);
+  patch<T>(path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
+    return this.request<T>('PATCH', path, body, {}, idempotencyKey);
   }
-  delete<T>(path: string): Promise<T> {
-    return this.request<T>('DELETE', path);
+  delete<T>(path: string, idempotencyKey?: string): Promise<T> {
+    return this.request<T>('DELETE', path, undefined, {}, idempotencyKey);
   }
 
   /** Convenience for the keyset-paginated list endpoints. */

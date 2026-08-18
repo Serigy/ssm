@@ -14,9 +14,10 @@ export const hrApi = {
     api.list<Employee>(BASE, filter as Record<string, string | number | undefined>),
   get: (api: ApiClient, id: string) => api.get<Employee>(`${BASE}/${id}`),
   create: (api: ApiClient, dto: CreateEmployee) => api.post<Employee>(BASE, dto),
-  activate: (api: ApiClient, id: string) => api.post<Employee>(`${BASE}/${id}/activate`),
+  activate: (api: ApiClient, id: string) =>
+    api.post<Employee>(`${BASE}/${id}/activate`, undefined, `activate:${id}`),
   offboard: (api: ApiClient, id: string, dto: OffboardEmployee) =>
-    api.post<Employee>(`${BASE}/${id}/offboard`, dto),
+    api.post<Employee>(`${BASE}/${id}/offboard`, dto, `offboard:${id}`),
 } as const;
 
 export type EmployeePage = Page<Employee>;

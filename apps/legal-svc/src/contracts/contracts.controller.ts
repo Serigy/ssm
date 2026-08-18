@@ -1,7 +1,14 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { createContractSchema, updateContractSchema, type Contract, type Page } from '@ssm/contracts';
-import { CurrentUser, RequirePermissions, TenantId, ZodValidationPipe } from '@ssm/nest-common';
+import {
+  CurrentUser,
+  CheckRevocation,
+  Idempotent,
+  RequirePermissions,
+  TenantId,
+  ZodValidationPipe,
+} from '@ssm/nest-common';
 import {
   AmendContractDto,
   AttachDocumentDto,
@@ -85,6 +92,9 @@ export class ContractsController {
 
   @Post(':id/amend')
   @HttpCode(200)
+  // A repeat would archive the same clause tree twice and bump the version
+  // number for nothing.
+  @Idempotent()
   @RequirePermissions('legal:contract:update')
   @ApiOperation({
     summary: 'Registra um aditivo',
@@ -103,6 +113,8 @@ export class ContractsController {
 
   @Post(':id/status')
   @HttpCode(200)
+  // Activating publishes legal.contract.activated.
+  @Idempotent()
   @RequirePermissions('legal:contract:approve')
   @ApiOperation({
     summary: 'Altera o estado do contrato',
@@ -149,6 +161,8 @@ export class ContractsController {
 
   @Get(':id/document')
   @RequirePermissions('legal:contract:read')
+  // Presigned URL to a signed contract — same reasoning as the financial one.
+  @CheckRevocation()
   @ApiOperation({ summary: 'Emite uma URL assinada de leitura para o PDF' })
   document(@TenantId() tenantId: string, @Param('id', ParseUUIDPipe) id: string) {
     return this.contracts.documentTicket(tenantId, id);

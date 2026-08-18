@@ -50,6 +50,7 @@ services:
   gateway:
     port: 3000
     replicas: 3
+    secretKeys: [rabbitmq_password, redis_password, jwt_public_key.pem]
     resources:
       requests: { cpu: 200m, memory: 256Mi }
       limits:   { cpu: 1000m, memory: 768Mi }
@@ -57,25 +58,27 @@ services:
     port: 3001
     database: ssm_identity
     # The only workload that gets the signing key.
-    secretKeys: [postgres_password, rabbitmq_password, jwt_private_key.pem, jwt_public_key.pem]
+    secretKeys:
+      [postgres_password, rabbitmq_password, redis_password,
+       jwt_private_key.pem, jwt_public_key.pem]
   financial-svc:
     port: 3002
     database: ssm_financial
     secretKeys:
-      [postgres_password, rabbitmq_password, jwt_public_key.pem,
+      [postgres_password, rabbitmq_password, redis_password, jwt_public_key.pem,
        r2_account_id, r2_access_key_id, r2_secret_access_key]
   hr-svc:
     port: 3003
     database: ssm_hr
     secretKeys:
-      [postgres_password, rabbitmq_password, jwt_public_key.pem, pii_encryption_key,
-       r2_account_id, r2_access_key_id, r2_secret_access_key]
+      [postgres_password, rabbitmq_password, redis_password, jwt_public_key.pem,
+       pii_encryption_key, r2_account_id, r2_access_key_id, r2_secret_access_key]
   legal-svc:
     port: 3004
     engine: mongodb
     database: ssm_legal
     secretKeys:
-      [mongo_password, rabbitmq_password, jwt_public_key.pem,
+      [mongo_password, rabbitmq_password, redis_password, jwt_public_key.pem,
        r2_account_id, r2_access_key_id, r2_secret_access_key]
 
 # Static bundles. Each remote is served under the path its build was compiled
@@ -122,12 +125,24 @@ rabbitmq:
   user: ssm
   vhost: /
 
+# Coordination state only — rate-limit counters, idempotency records, the token
+# denylist. Nothing here is a cache of something that lives in Postgres or
+# Mongo, so losing it costs correctness for seconds, not data.
+# See docs/adr/0010-cache-e-busca.md.
+redisConfig:
+  host: ssm-redis-master
+  port: 6379
+  db: 0
+  enabled: true
+
 # Bundled datastores — off by default. Production points at managed services.
 postgresql:
   enabled: false
 mongodb:
   enabled: false
 rabbitmq:
+  enabled: false
+redis:
   enabled: false
 
 networkPolicy:

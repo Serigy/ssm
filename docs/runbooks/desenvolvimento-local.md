@@ -31,12 +31,13 @@ Abra `http://localhost:4200` e entre com `admin@serigy.local` /
 | 3001–3004 | identity / financial / hr / legal |
 | 5433 | PostgreSQL |
 | 27018 | MongoDB |
+| 6380 | Redis |
 | 15672 | RabbitMQ (gestão) |
 | 9001 | MinIO (console) |
 
-Postgres e Mongo saem em portas não-padrão de propósito: quase toda máquina de
-desenvolvimento já tem um dos dois rodando, e a colisão custa meia hora de
-confusão.
+Postgres, Mongo e Redis saem em portas não-padrão de propósito: quase toda
+máquina de desenvolvimento já tem um dos três rodando, e a colisão custa meia
+hora de confusão.
 
 ## O laço de trabalho
 

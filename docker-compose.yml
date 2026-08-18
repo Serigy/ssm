@@ -13,6 +13,7 @@ x-secrets: &all-secrets
   - mongo_password
   - rabbitmq_password
   - jwt_public_key.pem
+  - redis_password
   - minio_password
   - r2_account_id
   - r2_access_key_id
@@ -31,6 +32,8 @@ x-service-base: &service-base
     MONGO_USER: ssm
     RABBITMQ_HOST: rabbitmq
     RABBITMQ_USER: ssm
+    REDIS_HOST: redis
+    REDIS_ENABLED: "true"
     R2_ENDPOINT: http://minio:9000
     R2_BUCKET: ssm-documents
     JWT_ISSUER: http://localhost:3000
@@ -43,6 +46,7 @@ x-service-base: &service-base
   depends_on:
     postgres: { condition: service_healthy }
     rabbitmq: { condition: service_healthy }
+    redis: { condition: service_healthy }
 
 services:
   # --- infrastructure -------------------------------------------------------
@@ -59,7 +63,7 @@ services:
       # isolation that matters (no cross-service joins) without the cost of
       # four Postgres instances on a laptop.
       - ./deploy/local/init-databases.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
-    ports: ['5433:5432']
+    ports: ['127.0.0.1:5433:5432']
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ssm -d postgres']
       interval: 5s
@@ -75,7 +79,7 @@ services:
     secrets: [mongo_password]
     volumes:
       - mongodata:/data/db
-    ports: ['27018:27017']
+    ports: ['127.0.0.1:27018:27017']
     healthcheck:
       test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
       interval: 10s
@@ -94,14 +98,45 @@ services:
       - ./deploy/local/generated/rabbitmq-definitions.json:/etc/rabbitmq/definitions.json:ro
       - ./deploy/local/rabbitmq.conf:/etc/rabbitmq/conf.d/10-ssm.conf:ro
     ports:
-      - '5672:5672'
-      - '15672:15672'   # management UI
+      - '127.0.0.1:5672:5672'
+      - '127.0.0.1:15672:15672'   # management UI
     healthcheck:
       test: ['CMD', 'rabbitmq-diagnostics', '-q', 'check_running']
       interval: 10s
       timeout: 10s
       retries: 10
       start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    # List form, not a folded scalar. `command: >` collapses to one string that
+    # Compose then tokenises itself, which ate the quoting and started Redis
+    # with NO arguments at all — requirepass empty, open to anyone who could
+    # reach the port. The list form hands the third element to `sh -c` verbatim.
+    #
+    # The password is read from the mounted secret at startup rather than passed
+    # as a literal argument: an argument is visible in `docker inspect` and in
+    # the host's process list.
+    command:
+      - sh
+      - -c
+      - >-
+        exec redis-server
+        --requirepass "$$(cat /run/secrets/redis_password)"
+        --appendonly no
+        --save ''
+        --maxmemory 256mb
+        --maxmemory-policy noeviction
+    secrets: [redis_password]
+    # 6380 on the host, like Postgres on 5433 and Mongo on 27018: a developer
+    # machine very often already has one of these running, and the collision
+    # costs half an hour of confusion. Inside the network it is the usual 6379.
+    ports: ['127.0.0.1:6380:6379']
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$(cat /run/secrets/redis_password)" ping | grep -q PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   # Stands in for Cloudflare R2. Same S3 API, so ObjectStorageService takes the
   # identical code path locally and in production.
@@ -115,8 +150,8 @@ services:
     volumes:
       - miniodata:/data
     ports:
-      - '9000:9000'
-      - '9001:9001'   # console
+      - '127.0.0.1:9000:9000'
+      - '127.0.0.1:9001:9001'   # console
     healthcheck:
       test: ['CMD', 'mc', 'ready', 'local']
       interval: 10s
@@ -153,6 +188,7 @@ services:
     secrets:
       - postgres_password
       - rabbitmq_password
+      - redis_password
       - jwt_private_key.pem
       - jwt_public_key.pem
     ports: ['3001:3001']
@@ -183,6 +219,7 @@ services:
     secrets:
       - postgres_password
       - rabbitmq_password
+      - redis_password
       - jwt_public_key.pem
       - pii_encryption_key
       - minio_password
@@ -204,6 +241,7 @@ services:
     depends_on:
       mongo: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
+      redis: { condition: service_healthy }
     secrets: *all-secrets
     ports: ['3004:3004']
 
@@ -222,13 +260,16 @@ services:
       LEGAL_URL: http://legal-svc:3004
     secrets:
       - rabbitmq_password
+      - redis_password
       - jwt_public_key.pem
     depends_on:
       rabbitmq: { condition: service_healthy }
+      redis: { condition: service_healthy }
     ports: ['3000:3000']
 
 secrets:
   postgres_password:     { file: ./secrets/local/postgres_password }
+  redis_password:        { file: ./secrets/local/redis_password }
   mongo_password:        { file: ./secrets/local/mongo_password }
   rabbitmq_password:     { file: ./secrets/local/rabbitmq_password }
   minio_password:        { file: ./secrets/local/minio_password }

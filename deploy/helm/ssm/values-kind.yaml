@@ -91,6 +91,23 @@ mongodb:
   persistence:
     size: 2Gi
 
+redisConfig:
+  host: ssm-redis-master
+
+redis:
+  enabled: true
+  auth:
+    existingSecret: ssm-secrets
+    existingSecretPasswordKey: redis_password
+  architecture: standalone
+  master:
+    # Coordination state is disposable by design; persisting it buys nothing
+    # and costs a PVC on a laptop.
+    persistence:
+      enabled: false
+  replica:
+    replicaCount: 0
+
 rabbitmq:
   enabled: true
   auth:

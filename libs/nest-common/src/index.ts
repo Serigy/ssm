@@ -6,6 +6,7 @@ export * from './http/index.js';
 export * from './auth/index.js';
 export * from './health/index.js';
 export * from './messaging/index.js';
+export * from './redis/index.js';
 export * from './storage/index.js';
 export * from './bootstrap/index.js';
 export * from './openapi/index.js';

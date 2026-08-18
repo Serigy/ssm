@@ -57,6 +57,14 @@ vars are visible in `kubectl describe`, in crash dumps and in /proc.
   value: {{ .root.Values.rabbitmq.user | quote }}
 - name: RABBITMQ_VHOST
   value: {{ .root.Values.rabbitmq.vhost | quote }}
+- name: REDIS_HOST
+  value: {{ .root.Values.redisConfig.host | quote }}
+- name: REDIS_PORT
+  value: {{ .root.Values.redisConfig.port | quote }}
+- name: REDIS_DB
+  value: {{ .root.Values.redisConfig.db | quote }}
+- name: REDIS_ENABLED
+  value: {{ .root.Values.redisConfig.enabled | quote }}
 - name: ZEN_ENABLED
   value: {{ .root.Values.config.zen.enabled | quote }}
 - name: ZEN_BLOCKING

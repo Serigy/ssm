@@ -10,6 +10,8 @@ import {
 } from '@ssm/contracts';
 import {
   CurrentUser,
+  CheckRevocation,
+  Idempotent,
   RequirePermissions,
   TenantId,
   ZodValidationPipe,
@@ -57,6 +59,11 @@ export class EmployeesController {
 
   @Get(':id')
   @RequirePermissions('hr:employee:read')
+  // A read is normally exempt from the revocation lookup, for the reasons in
+  // TokenDenylistService. This one is not: with hr:payroll:read it returns
+  // salary, national id and address — the most sensitive response in the
+  // system, and worth a Redis round trip.
+  @CheckRevocation()
   @ApiOperation({ summary: 'Obtém um colaborador' })
   findOne(
     @TenantId() tenantId: string,
@@ -93,6 +100,8 @@ export class EmployeesController {
 
   @Post(':id/activate')
   @HttpCode(200)
+  // Publishes hr.employee.hired, which the financial module consumes.
+  @Idempotent()
   @RequirePermissions('hr:employee:update')
   @ApiOperation({
     summary: 'Conclui o onboarding',
@@ -108,6 +117,9 @@ export class EmployeesController {
 
   @Post(':id/offboard')
   @HttpCode(200)
+  // Publishes hr.employee.offboarded, which stops recurring charges and flags
+  // contracts. A duplicate would be seen by two other modules.
+  @Idempotent()
   // Ending an employment relationship is not an ordinary edit.
   @RequirePermissions('hr:employee:delete')
   @ApiOperation({

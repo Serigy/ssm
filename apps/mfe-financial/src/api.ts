@@ -23,13 +23,18 @@ export const financialApi = {
 
   create: (api: ApiClient, dto: CreateInvoice) => api.post<Invoice>(BASE, dto),
 
-  issue: (api: ApiClient, id: string) => api.post<Invoice>(`${BASE}/${id}/issue`),
+  // Derived key: issuing invoice X is the same operation however many times
+  // it is attempted, so a second click replays the first answer.
+  issue: (api: ApiClient, id: string) => api.post<Invoice>(`${BASE}/${id}/issue`, undefined, `issue:${id}`),
 
+  // NOT derived. Two payments against the same invoice are two operations,
+  // and a derived key would silently swallow the second one. The generated
+  // per-call key still protects against a duplicated delivery of one request.
   recordPayment: (api: ApiClient, id: string, dto: RecordPayment) =>
     api.post<Invoice>(`${BASE}/${id}/payments`, dto),
 
   void: (api: ApiClient, id: string, reason: string) =>
-    api.post<Invoice>(`${BASE}/${id}/void`, { reason }),
+    api.post<Invoice>(`${BASE}/${id}/void`, { reason }, `void:${id}`),
 
   remove: (api: ApiClient, id: string) => api.delete<void>(`${BASE}/${id}`),
 

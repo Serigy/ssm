@@ -25,3 +25,7 @@ dependencies:
     version: "15.x.x"
     repository: https://charts.bitnami.com/bitnami
     condition: rabbitmq.enabled
+  - name: redis
+    version: "20.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled

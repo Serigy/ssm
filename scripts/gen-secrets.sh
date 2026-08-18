@@ -46,6 +46,7 @@ write postgres_password  "$(rand 32 32)"
 write mongo_password     "$(rand 32 32)"
 write rabbitmq_password  "$(rand 32 32)"
 write session_secret     "$(rand 48 44)"
+write redis_password     "$(rand 32 32)"
 # Used by pgcrypto to encrypt the national id column in hr-svc. Rotating it
 # requires re-encrypting that column — see docs/runbooks/rotate-secrets.md.
 write pii_encryption_key "$(rand 48 44)"

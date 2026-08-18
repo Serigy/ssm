@@ -3,6 +3,7 @@ import { CONFIG, loadConfig, type AppConfig } from '../config/app-config.js';
 import { SecretsModule } from '../secrets/secrets.module.js';
 import { SsmAuthModule } from '../auth/auth.module.js';
 import { MessagingModule } from '../messaging/messaging.module.js';
+import { RedisModule } from '../redis/redis.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { HealthModule, type HealthModuleOptions } from '../health/health.module.js';
 import { CorrelationMiddleware } from '../http/correlation.middleware.js';
@@ -37,13 +38,15 @@ export class PlatformModule implements NestModule {
       global: true,
       imports: [
         SecretsModule,
+        // Before SsmAuthModule: the JWT guard resolves TokenDenylistService.
+        RedisModule,
         SsmAuthModule,
         MessagingModule,
         ...storage,
         HealthModule.forRoot({ checks: options.checks }),
       ],
       providers: [{ provide: CONFIG, useValue: cfg }],
-      exports: [CONFIG, SecretsModule, SsmAuthModule, MessagingModule, ...storage],
+      exports: [CONFIG, SecretsModule, RedisModule, SsmAuthModule, MessagingModule, ...storage],
     };
   }
 
