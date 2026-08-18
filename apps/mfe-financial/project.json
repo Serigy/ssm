@@ -1,0 +1,59 @@
+{
+  "name": "mfe-financial",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/mfe-financial/src",
+  "projectType": "application",
+  "tags": [
+    "scope:frontend",
+    "type:remote",
+    "module:financial"
+  ],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite build",
+        "cwd": "apps/mfe-financial"
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite --port 4201 --strictPort",
+        "cwd": "apps/mfe-financial"
+      }
+    },
+    "preview": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite preview --port 4201 --strictPort",
+        "cwd": "apps/mfe-financial"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p apps/mfe-financial/tsconfig.json --noEmit"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint apps/mfe-financial/src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --root apps/mfe-financial --passWithNoTests"
+      }
+    },
+    "container": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -f docker/web.Dockerfile --build-arg APP=mfe-financial -t ssm/mfe-financial:dev .",
+        "cwd": "."
+      }
+    }
+  }
+}

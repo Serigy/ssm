@@ -1,0 +1,24 @@
+---
+# Non-secret host configuration. Secrets come from Ansible Vault or, better,
+# are never templated onto disk at all — see roles/ssm_host.
+
+timezone: America/Sao_Paulo
+locale: pt_BR.UTF-8
+
+# Ports the host exposes. Everything else is denied by the firewall.
+firewall_allowed_tcp:
+  - 22     # SSH — restrict the source range at the network level too
+  - 80     # HTTP, redirected to HTTPS by the ingress
+  - 443    # HTTPS
+  - 6443   # Kubernetes API (control plane hosts only)
+
+docker_users:
+  - deploy
+
+kubernetes_version: "1.32"
+helm_version: "3.17.3"
+
+ssm_app_dir: /opt/ssm
+ssm_secrets_dir: /opt/ssm/secrets
+ssm_service_user: ssm
+ssm_service_uid: 10001

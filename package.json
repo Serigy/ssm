@@ -1,0 +1,39 @@
+{
+  "name": "@ssm/source",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SSM \u2014 Serigy Service Manager. Financial, HR and Legal modules on a NestJS microservice backend with a Module-Federation micro-frontend.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@11.20.0",
+  "scripts": {
+    "build": "nx run-many -t build",
+    "test": "nx run-many -t test",
+    "lint": "nx run-many -t lint",
+    "typecheck": "nx run-many -t typecheck",
+    "affected": "nx affected -t lint,typecheck,test,build",
+    "openapi": "nx run-many -t openapi",
+    "dev": "nx run-many -t serve --parallel=10",
+    "graph": "nx graph",
+    "secrets:init": "./scripts/gen-secrets.sh",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@typescript-eslint/eslint-plugin": "^8.31.0",
+    "@typescript-eslint/parser": "^8.31.0",
+    "eslint": "^9.25.1",
+    "eslint-config-prettier": "^10.1.2",
+    "nx": "^21.0.3",
+    "prettier": "^3.5.3",
+    "tsc-alias": "^1.8.16",
+    "tslib": "^2.8.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2"
+  }
+}

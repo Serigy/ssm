@@ -1,0 +1,11 @@
+# Copy to production.tfvars and fill in. *.tfvars is gitignored.
+# The API token is NOT set here — export TF_VAR_cloudflare_api_token instead.
+
+environment           = "production"
+cloudflare_account_id = "REPLACE_ME"
+domain                = "ssm.serigy.io"
+kube_context          = "serigy-prod"
+namespace             = "ssm"
+
+# Ten years. Confirm with counsel before changing — statutory retention.
+document_retention_days = 3650

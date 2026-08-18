@@ -1,0 +1,62 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/status": {
+      "get": {
+        "description": "Consulta o /health/ready de cada serviço. É o que o shell usa para avisar que um módulo está fora do ar antes de o usuário clicar nele.",
+        "operationId": "Status_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Estado agregado dos módulos",
+        "tags": [
+          "gateway"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "SSM — Gateway",
+    "description": "Ponto único de entrada do navegador. Encaminha /api/identity, /api/financial, /api/hr e /api/legal para os serviços correspondentes, aplicando limite de requisições e as políticas de CORS e cabeçalhos. A especificação completa de cada módulo está no respectivo arquivo em docs/api/.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Serigy Platform",
+      "url": "https://ssm.serigy.io",
+      "email": "platform@serigy.io"
+    }
+  },
+  "tags": [
+    {
+      "name": "gateway",
+      "description": "Estado e roteamento"
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local gateway"
+    },
+    {
+      "url": "https://ssm.local",
+      "description": "kind cluster"
+    },
+    {
+      "url": "https://api.ssm.serigy.io",
+      "description": "Production"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "in": "header"
+      }
+    },
+    "schemas": {}
+  }
+}

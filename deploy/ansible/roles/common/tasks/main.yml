@@ -1,0 +1,68 @@
+---
+- name: Definir fuso horário
+  community.general.timezone:
+    name: "{{ timezone }}"
+
+- name: Instalar pacotes base
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - jq
+      - unattended-upgrades
+      - fail2ban
+      - ufw
+      - chrony          # clock drift breaks JWT expiry validation
+      - auditd
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Habilitar atualizações de segurança automáticas
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    mode: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+# --- SSH hardening ----------------------------------------------------------
+# Each of these closes a specific, commonly exploited path. They are not
+# stylistic preferences.
+- name: Endurecer o SSH
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?{{ item.key }}"
+    line: "{{ item.key }} {{ item.value }}"
+    validate: "sshd -t -f %s"
+  loop:
+    - { key: PermitRootLogin, value: "no" }
+    - { key: PasswordAuthentication, value: "no" }
+    - { key: ChallengeResponseAuthentication, value: "no" }
+    - { key: PubkeyAuthentication, value: "yes" }
+    - { key: X11Forwarding, value: "no" }
+    - { key: MaxAuthTries, value: "3" }
+    - { key: ClientAliveInterval, value: "300" }
+    - { key: AllowAgentForwarding, value: "no" }
+  notify: Restart sshd
+
+- name: Configurar o firewall
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ firewall_allowed_tcp }}"
+
+- name: Negar tudo o mais por padrão
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+- name: Garantir sincronização de relógio
+  ansible.builtin.service:
+    name: chrony
+    state: started
+    enabled: true

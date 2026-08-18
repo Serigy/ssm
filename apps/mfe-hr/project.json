@@ -1,0 +1,59 @@
+{
+  "name": "mfe-hr",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/mfe-hr/src",
+  "projectType": "application",
+  "tags": [
+    "scope:frontend",
+    "type:remote",
+    "module:hr"
+  ],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite build",
+        "cwd": "apps/mfe-hr"
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite --port 4202 --strictPort",
+        "cwd": "apps/mfe-hr"
+      }
+    },
+    "preview": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite preview --port 4202 --strictPort",
+        "cwd": "apps/mfe-hr"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p apps/mfe-hr/tsconfig.json --noEmit"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint apps/mfe-hr/src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --root apps/mfe-hr --passWithNoTests"
+      }
+    },
+    "container": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -f docker/web.Dockerfile --build-arg APP=mfe-hr -t ssm/mfe-hr:dev .",
+        "cwd": "."
+      }
+    }
+  }
+}

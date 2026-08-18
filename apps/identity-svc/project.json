@@ -1,0 +1,65 @@
+{
+  "name": "identity-svc",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/identity-svc/src",
+  "projectType": "application",
+  "tags": [
+    "scope:backend",
+    "module:platform"
+  ],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nest build -p apps/identity-svc/tsconfig.build.json && tsc-alias -p apps/identity-svc/tsconfig.build.json",
+        "cwd": "."
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nest start --watch -p apps/identity-svc/tsconfig.build.json",
+        "cwd": "."
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p apps/identity-svc/tsconfig.json --noEmit"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint apps/identity-svc/src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --root apps/identity-svc --passWithNoTests"
+      }
+    },
+    "openapi": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "SSM_EMIT_OPENAPI=docs/api/identity.openapi.json SSM_SECRETS_DIR=secrets/local node apps/identity-svc/dist/apps/identity-svc/src/main.js",
+        "cwd": "."
+      }
+    },
+    "container": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -f docker/service.Dockerfile --build-arg APP=identity-svc -t ssm/identity-svc:dev .",
+        "cwd": "."
+      }
+    },
+    "migration:run": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "SSM_SECRETS_DIR=secrets/local tsx node_modules/typeorm/cli.js migration:run -d apps/identity-svc/src/database/data-source.ts",
+        "cwd": "."
+      }
+    }
+  }
+}

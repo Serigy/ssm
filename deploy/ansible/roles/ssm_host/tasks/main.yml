@@ -1,0 +1,61 @@
+---
+- name: Criar o usuário de serviço
+  ansible.builtin.user:
+    name: "{{ ssm_service_user }}"
+    uid: "{{ ssm_service_uid }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: Criar os diretórios da aplicação
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ ssm_service_user }}"
+    group: "{{ ssm_service_user }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ ssm_app_dir }}", mode: "0755" }
+    # 0700: only the service user can even list the secrets directory.
+    - { path: "{{ ssm_secrets_dir }}", mode: "0700" }
+    - { path: "{{ ssm_app_dir }}/logs", mode: "0755" }
+
+- name: Instalar a rotação de logs
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/ssm
+    mode: "0644"
+    content: |
+      {{ ssm_app_dir }}/logs/*.log {
+        daily
+        rotate 14
+        compress
+        delaycompress
+        missingok
+        notifempty
+        create 0640 {{ ssm_service_user }} {{ ssm_service_user }}
+      }
+
+- name: Auditar acessos ao diretório de segredos
+  ansible.builtin.lineinfile:
+    path: /etc/audit/rules.d/ssm.rules
+    line: "-w {{ ssm_secrets_dir }} -p rwa -k ssm_secrets"
+    create: true
+    mode: "0640"
+  notify: Restart auditd
+
+# Ansible deliberately does not write the secret files. Doing so would put them
+# in the playbook, in Vault-encrypted variables that get decrypted onto the
+# controller's disk, and into --diff output. They are delivered by the External
+# Secrets Operator instead. See docs/security/secrets-management.md.
+- name: Verificar se os segredos já foram entregues
+  ansible.builtin.find:
+    paths: "{{ ssm_secrets_dir }}"
+    file_type: file
+  register: ssm_secret_files
+
+- name: Avisar quando o diretório de segredos está vazio
+  ansible.builtin.debug:
+    msg: >-
+      {{ ssm_secrets_dir }} está vazio. Os segredos são entregues pelo External
+      Secrets Operator, não por este playbook — confira se ele está sincronizando.
+  when: ssm_secret_files.matched | int == 0

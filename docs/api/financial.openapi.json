@@ -1,0 +1,381 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/financial/v1/invoices": {
+      "get": {
+        "description": "Paginação por cursor (keyset). Passe `nextCursor` da resposta anterior em `cursor`; o cursor é opaco e não deve ser construído pelo cliente.",
+        "operationId": "Invoices_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoicePageDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lista faturas",
+        "tags": [
+          "invoices"
+        ]
+      },
+      "post": {
+        "description": "Os totais são calculados no servidor; valores enviados pelo cliente são ignorados.",
+        "operationId": "Invoices_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInvoiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cria uma fatura em rascunho",
+        "tags": [
+          "invoices"
+        ]
+      }
+    },
+    "/api/financial/v1/invoices/{id}": {
+      "get": {
+        "operationId": "Invoices_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Fatura inexistente ou de outro cliente."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Obtém uma fatura",
+        "tags": [
+          "invoices"
+        ]
+      },
+      "put": {
+        "operationId": "Invoices_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInvoiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "409": {
+            "description": "A fatura já foi emitida e não pode ser alterada."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Altera um rascunho",
+        "tags": [
+          "invoices"
+        ]
+      },
+      "delete": {
+        "operationId": "Invoices_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "Faturas emitidas são canceladas, não excluídas."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Exclui um rascunho",
+        "tags": [
+          "invoices"
+        ]
+      }
+    },
+    "/api/financial/v1/invoices/{id}/issue": {
+      "post": {
+        "description": "Atribui o número sequencial do exercício, congela os valores e publica `financial.invoice.issued`. Não pode ser desfeito — use o cancelamento.",
+        "operationId": "Invoices_issue",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Emite a fatura",
+        "tags": [
+          "invoices"
+        ]
+      }
+    },
+    "/api/financial/v1/invoices/{id}/payments": {
+      "post": {
+        "operationId": "Invoices_recordPayment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordPaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Registra um pagamento, total ou parcial",
+        "tags": [
+          "invoices"
+        ]
+      }
+    },
+    "/api/financial/v1/invoices/{id}/void": {
+      "post": {
+        "description": "Mantém o registro e o número no histórico. Exige justificativa.",
+        "operationId": "Invoices_voidInvoice",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoidInvoiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancela a fatura",
+        "tags": [
+          "invoices"
+        ]
+      }
+    },
+    "/api/financial/v1/invoices/{id}/document": {
+      "get": {
+        "description": "Devolve uma URL assinada de curta duração no R2. O arquivo não passa pelo serviço.",
+        "operationId": "Invoices_document",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Emite um link temporário para o PDF",
+        "tags": [
+          "invoices"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "SSM — Financial",
+    "description": "Faturamento, contas a receber e a pagar. Todos os valores trafegam como inteiros na menor unidade da moeda (centavos) com o código ISO-4217 — nunca como ponto flutuante.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Serigy Platform",
+      "url": "https://ssm.serigy.io",
+      "email": "platform@serigy.io"
+    }
+  },
+  "tags": [
+    {
+      "name": "invoices",
+      "description": "Emissão, pagamento e cancelamento de faturas"
+    },
+    {
+      "name": "reports",
+      "description": "Posição de recebíveis e exportações"
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local gateway"
+    },
+    {
+      "url": "https://ssm.local",
+      "description": "kind cluster"
+    },
+    {
+      "url": "https://api.ssm.serigy.io",
+      "description": "Production"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "in": "header"
+      }
+    },
+    "schemas": {
+      "InvoicePageDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "InvoiceDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateInvoiceDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateInvoiceDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "RecordPaymentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "VoidInvoiceDto": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  }
+}

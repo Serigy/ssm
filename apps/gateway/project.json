@@ -1,0 +1,58 @@
+{
+  "name": "gateway",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/gateway/src",
+  "projectType": "application",
+  "tags": [
+    "scope:backend",
+    "type:gateway"
+  ],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nest build -p apps/gateway/tsconfig.build.json && tsc-alias -p apps/gateway/tsconfig.build.json",
+        "cwd": "."
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nest start --watch -p apps/gateway/tsconfig.build.json",
+        "cwd": "."
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p apps/gateway/tsconfig.json --noEmit"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint apps/gateway/src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --root apps/gateway --passWithNoTests"
+      }
+    },
+    "openapi": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "SSM_EMIT_OPENAPI=docs/api/gateway.openapi.json SSM_SECRETS_DIR=secrets/local node apps/gateway/dist/apps/gateway/src/main.js",
+        "cwd": "."
+      }
+    },
+    "container": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -f docker/service.Dockerfile --build-arg APP=gateway -t ssm/gateway:dev .",
+        "cwd": "."
+      }
+    }
+  }
+}

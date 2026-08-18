@@ -1,0 +1,58 @@
+{
+  "name": "legal-svc",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/legal-svc/src",
+  "projectType": "application",
+  "tags": [
+    "scope:backend",
+    "module:legal"
+  ],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nest build -p apps/legal-svc/tsconfig.build.json && tsc-alias -p apps/legal-svc/tsconfig.build.json",
+        "cwd": "."
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nest start --watch -p apps/legal-svc/tsconfig.build.json",
+        "cwd": "."
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p apps/legal-svc/tsconfig.json --noEmit"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint apps/legal-svc/src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --root apps/legal-svc --passWithNoTests"
+      }
+    },
+    "openapi": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "SSM_EMIT_OPENAPI=docs/api/legal.openapi.json SSM_SECRETS_DIR=secrets/local node apps/legal-svc/dist/apps/legal-svc/src/main.js",
+        "cwd": "."
+      }
+    },
+    "container": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -f docker/service.Dockerfile --build-arg APP=legal-svc -t ssm/legal-svc:dev .",
+        "cwd": "."
+      }
+    }
+  }
+}

@@ -1,0 +1,106 @@
+# Local kind overrides.
+#
+# The differences from production are deliberate and each has a reason:
+#   - one replica, because anti-affinity across two workers cannot satisfy three;
+#   - no autoscaling, because a laptop has no headroom to scale into;
+#   - bundled datastores, because there is no managed Postgres on a laptop;
+#   - Zen in report-only, so a developer's seed script is not blocked mid-run;
+#   - no TLS, because ssm.localhost has no certificate.
+
+global:
+  environment: development
+  domain: ssm.localhost
+
+image:
+  registry: ssm
+  tag: dev
+  # The images are side-loaded with `kind load docker-image`, so pulling would fail.
+  pullPolicy: Never
+
+config:
+  logLevel: debug
+  jwtIssuer: http://ssm.localhost
+  zen:
+    enabled: true
+    blocking: false
+
+defaults:
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+  autoscaling:
+    enabled: false
+  podDisruptionBudget:
+    enabled: false
+
+services:
+  gateway:
+    replicas: 1
+
+web:
+  shell: { replicas: 1 }
+  mfe-financial: { replicas: 1 }
+  mfe-hr: { replicas: 1 }
+  mfe-legal: { replicas: 1 }
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  tls:
+    enabled: false
+
+postgres:
+  host: ssm-postgresql
+  ssl: false
+
+postgresql:
+  enabled: true
+  auth:
+    username: ssm
+    database: postgres
+    existingSecret: ssm-secrets
+    secretKeys:
+      adminPasswordKey: postgres_password
+      userPasswordKey: postgres_password
+  primary:
+    persistence:
+      size: 2Gi
+    # Creates one database per service on first boot, matching compose.
+    initdb:
+      scripts:
+        00-databases.sql: |
+          CREATE DATABASE ssm_identity;
+          CREATE DATABASE ssm_financial;
+          CREATE DATABASE ssm_hr;
+          \connect ssm_identity
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          \connect ssm_financial
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          \connect ssm_hr
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+mongodb:
+  enabled: true
+  auth:
+    rootUser: ssm
+    existingSecret: ssm-secrets
+    secretKeys:
+      adminPasswordKey: mongo_password
+  persistence:
+    size: 2Gi
+
+rabbitmq:
+  enabled: true
+  auth:
+    username: ssm
+    existingPasswordSecret: ssm-secrets
+    existingSecretPasswordKey: rabbitmq_password
+  persistence:
+    size: 1Gi
+
+networkPolicy:
+  # kind's default CNI does not enforce NetworkPolicy, so applying it here would
+  # give false confidence. It is exercised in staging.
+  enabled: false

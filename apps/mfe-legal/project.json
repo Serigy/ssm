@@ -1,0 +1,59 @@
+{
+  "name": "mfe-legal",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/mfe-legal/src",
+  "projectType": "application",
+  "tags": [
+    "scope:frontend",
+    "type:remote",
+    "module:legal"
+  ],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite build",
+        "cwd": "apps/mfe-legal"
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite --port 4203 --strictPort",
+        "cwd": "apps/mfe-legal"
+      }
+    },
+    "preview": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite preview --port 4203 --strictPort",
+        "cwd": "apps/mfe-legal"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p apps/mfe-legal/tsconfig.json --noEmit"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint apps/mfe-legal/src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --root apps/mfe-legal --passWithNoTests"
+      }
+    },
+    "container": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -f docker/web.Dockerfile --build-arg APP=mfe-legal -t ssm/mfe-legal:dev .",
+        "cwd": "."
+      }
+    }
+  }
+}

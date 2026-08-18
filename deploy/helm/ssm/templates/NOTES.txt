@@ -1,0 +1,25 @@
+SSM {{ .Chart.AppVersion }} instalado como "{{ .Release.Name }}" em {{ .Release.Namespace }}.
+
+Ambiente: {{ .Values.global.environment }}
+Imagens:  {{ .Values.image.registry }}/*:{{ .Values.image.tag }}
+
+{{- if .Values.ingress.enabled }}
+
+  Aplicação:  http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.global.domain }}
+  API:        http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.global.domain }}/api
+
+{{- if eq .Values.global.domain "ssm.localhost" }}
+
+  Se ainda não fez, adicione ao /etc/hosts:
+    127.0.0.1  ssm.localhost
+{{- end }}
+{{- end }}
+
+Verificar:
+  kubectl -n {{ .Release.Namespace }} get pods
+  kubectl -n {{ .Release.Namespace }} logs -l app.kubernetes.io/component=gateway -f
+
+Os segredos vêm do Secret "{{ .Values.secretName }}", montado em /run/secrets.
+Se os pods não subirem, confirme que ele existe:
+  kubectl -n {{ .Release.Namespace }} get secret {{ .Values.secretName }}
+  make k8s-secrets    # recria a partir de secrets/local/

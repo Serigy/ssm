@@ -1,0 +1,20 @@
+{{- if .Values.defaults.podDisruptionBudget.enabled }}
+{{- $root := . }}
+{{- range $name, $svc := .Values.services }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ssm.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  # Keeps a node drain from taking the last replica of a service down.
+  minAvailable: {{ $root.Values.defaults.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $root.Release.Name }}
+      app.kubernetes.io/component: {{ $name }}
+{{- end }}
+{{- end }}

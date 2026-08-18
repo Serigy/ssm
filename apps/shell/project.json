@@ -1,0 +1,58 @@
+{
+  "name": "shell",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/shell/src",
+  "projectType": "application",
+  "tags": [
+    "scope:frontend",
+    "type:host"
+  ],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite build",
+        "cwd": "apps/shell"
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite --port 4200 --strictPort",
+        "cwd": "apps/shell"
+      }
+    },
+    "preview": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite preview --port 4200 --strictPort",
+        "cwd": "apps/shell"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p apps/shell/tsconfig.json --noEmit"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint apps/shell/src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --root apps/shell --passWithNoTests"
+      }
+    },
+    "container": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -f docker/web.Dockerfile --build-arg APP=shell -t ssm/shell:dev .",
+        "cwd": "."
+      }
+    }
+  }
+}

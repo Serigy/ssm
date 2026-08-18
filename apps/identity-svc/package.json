@@ -1,0 +1,42 @@
+{
+  "name": "@ssm/identity-svc",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "dependencies": {
+    "@aikidosec/firewall": "^1.0.0",
+    "@aws-sdk/client-s3": "^3.789.0",
+    "@aws-sdk/s3-request-presigner": "^3.789.0",
+    "@nestjs/common": "^11.1.0",
+    "@nestjs/core": "^11.1.0",
+    "@nestjs/platform-express": "^11.1.0",
+    "@nestjs/swagger": "^11.1.5",
+    "@nestjs/terminus": "^11.0.0",
+    "@nestjs/typeorm": "^11.0.0",
+    "@ssm/contracts": "workspace:*",
+    "@ssm/nest-common": "workspace:*",
+    "amqplib": "^0.10.8",
+    "argon2": "^0.43.0",
+    "cookie-parser": "^1.4.7",
+    "helmet": "^8.1.0",
+    "jose": "^6.0.10",
+    "nestjs-zod": "^4.3.1",
+    "pg": "^8.15.6",
+    "pino": "^9.6.0",
+    "pino-http": "^10.4.0",
+    "pino-pretty": "^13.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "tslib": "^2.8.1",
+    "typeorm": "^0.3.22",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.7",
+    "@nestjs/testing": "^11.1.0",
+    "@types/amqplib": "^0.10.7",
+    "@types/cookie-parser": "^1.4.8",
+    "@types/express": "^5.0.1",
+    "supertest": "^7.1.0"
+  }
+}

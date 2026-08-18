@@ -1,0 +1,47 @@
+:root {
+  --font-display: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-sans: "Source Sans 3", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  /* escala 1.25 arredondada, base 16 */
+  --text-3xs: 11px;
+  --text-2xs: 12px;
+  --text-xs:  13px;
+  --text-sm:  14px;
+  --text-md:  16px;
+  --text-lg:  18px;
+  --text-xl:  22px;
+  --text-2xl: 28px;
+  --text-3xl: 34px;
+  --text-4xl: 44px;
+  --text-5xl: 56px;
+  --text-6xl: 72px;
+
+  --leading-tight: 1.08;
+  --leading-snug: 1.24;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  --weight-light: 300;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-black: 800;
+
+  --tracking-tight: -0.02em;
+  --tracking-snug: -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;
+  --tracking-caps: 0.09em;
+
+  /* papéis */
+  --type-hero-size: var(--text-6xl);
+  --type-hero-weight: var(--weight-black);
+  --type-h1-size: var(--text-4xl);
+  --type-h2-size: var(--text-3xl);
+  --type-h3-size: var(--text-xl);
+  --type-body-size: var(--text-md);
+  --type-caption-size: var(--text-xs);
+  --type-eyebrow-size: var(--text-2xs);
+}

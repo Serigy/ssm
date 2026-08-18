@@ -1,0 +1,246 @@
+# Local development stack.
+#
+# Secrets are mounted as files from secrets/local/ — the same interface a
+# Kubernetes Secret volume presents at /run/secrets, so the application code has
+# no idea which environment it is in. See secrets/README.md.
+#
+#   make secrets && make dev
+
+name: ssm
+
+x-secrets: &all-secrets
+  - postgres_password
+  - mongo_password
+  - rabbitmq_password
+  - jwt_public_key.pem
+  - minio_password
+  - r2_account_id
+  - r2_access_key_id
+  - r2_secret_access_key
+
+x-service-base: &service-base
+  restart: unless-stopped
+  environment: &service-env
+    NODE_ENV: development
+    LOG_LEVEL: debug
+    LOG_PRETTY: "true"
+    SSM_SECRETS_DIR: /run/secrets
+    POSTGRES_HOST: postgres
+    POSTGRES_USER: ssm
+    MONGO_HOST: mongo
+    MONGO_USER: ssm
+    RABBITMQ_HOST: rabbitmq
+    RABBITMQ_USER: ssm
+    R2_ENDPOINT: http://minio:9000
+    R2_BUCKET: ssm-documents
+    JWT_ISSUER: http://localhost:3000
+    JWT_AUDIENCE: ssm
+    CORS_ORIGINS: http://localhost:4200,http://localhost:4201,http://localhost:4202,http://localhost:4203
+    # Zen runs in report-only mode locally: it logs what it would have blocked
+    # without breaking a developer's seed script.
+    ZEN_ENABLED: "true"
+    ZEN_BLOCKING: "false"
+  depends_on:
+    postgres: { condition: service_healthy }
+    rabbitmq: { condition: service_healthy }
+
+services:
+  # --- infrastructure -------------------------------------------------------
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ssm
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: postgres
+    secrets: [postgres_password]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Creates one database per service. Separate databases, one server: the
+      # isolation that matters (no cross-service joins) without the cost of
+      # four Postgres instances on a laptop.
+      - ./deploy/local/init-databases.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
+    ports: ['5433:5432']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ssm -d postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  mongo:
+    image: mongo:8
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ssm
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_password
+      MONGO_INITDB_DATABASE: ssm_legal
+    secrets: [mongo_password]
+    volumes:
+      - mongodata:/data/db
+    ports: ['27018:27017']
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    # RabbitMQ 4 removed RABBITMQ_DEFAULT_PASS_FILE and refuses to start when it
+    # is set. The replacement is a definitions file, which is an improvement:
+    # it carries a salted hash rather than the password. It is generated from
+    # secrets/local/rabbitmq_password by scripts/gen-secrets.sh.
+    volumes:
+      - rabbitdata:/var/lib/rabbitmq
+      - ./deploy/local/generated/rabbitmq-definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ./deploy/local/rabbitmq.conf:/etc/rabbitmq/conf.d/10-ssm.conf:ro
+    ports:
+      - '5672:5672'
+      - '15672:15672'   # management UI
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'check_running']
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # Stands in for Cloudflare R2. Same S3 API, so ObjectStorageService takes the
+  # identical code path locally and in production.
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ssm-local
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_password
+    secrets: [minio_password]
+    volumes:
+      - miniodata:/data
+    ports:
+      - '9000:9000'
+      - '9001:9001'   # console
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio: { condition: service_healthy }
+    secrets: [minio_password]
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ssm-local \"$$(cat /run/secrets/minio_password)\" &&
+      mc mb --ignore-existing local/ssm-documents &&
+      mc anonymous set none local/ssm-documents &&
+      echo 'bucket ssm-documents pronto'
+      "
+    restart: on-failure
+
+  # --- application services -------------------------------------------------
+  identity-svc:
+    <<: *service-base
+    build:
+      context: .
+      dockerfile: docker/service.Dockerfile
+      args: { APP: identity-svc }
+    environment:
+      <<: *service-env
+      PORT: 3001
+      POSTGRES_DB: ssm_identity
+    # Only this service gets the private key. Every other one can verify but
+    # not mint — a compromise elsewhere cannot forge a token.
+    secrets:
+      - postgres_password
+      - rabbitmq_password
+      - jwt_private_key.pem
+      - jwt_public_key.pem
+    ports: ['3001:3001']
+
+  financial-svc:
+    <<: *service-base
+    build:
+      context: .
+      dockerfile: docker/service.Dockerfile
+      args: { APP: financial-svc }
+    environment:
+      <<: *service-env
+      PORT: 3002
+      POSTGRES_DB: ssm_financial
+    secrets: *all-secrets
+    ports: ['3002:3002']
+
+  hr-svc:
+    <<: *service-base
+    build:
+      context: .
+      dockerfile: docker/service.Dockerfile
+      args: { APP: hr-svc }
+    environment:
+      <<: *service-env
+      PORT: 3003
+      POSTGRES_DB: ssm_hr
+    secrets:
+      - postgres_password
+      - rabbitmq_password
+      - jwt_public_key.pem
+      - pii_encryption_key
+      - minio_password
+      - r2_account_id
+      - r2_access_key_id
+      - r2_secret_access_key
+    ports: ['3003:3003']
+
+  legal-svc:
+    <<: *service-base
+    build:
+      context: .
+      dockerfile: docker/service.Dockerfile
+      args: { APP: legal-svc }
+    environment:
+      <<: *service-env
+      PORT: 3004
+      MONGO_DB: ssm_legal
+    depends_on:
+      mongo: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    secrets: *all-secrets
+    ports: ['3004:3004']
+
+  gateway:
+    <<: *service-base
+    build:
+      context: .
+      dockerfile: docker/service.Dockerfile
+      args: { APP: gateway }
+    environment:
+      <<: *service-env
+      PORT: 3000
+      IDENTITY_URL: http://identity-svc:3001
+      FINANCIAL_URL: http://financial-svc:3002
+      HR_URL: http://hr-svc:3003
+      LEGAL_URL: http://legal-svc:3004
+    secrets:
+      - rabbitmq_password
+      - jwt_public_key.pem
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    ports: ['3000:3000']
+
+secrets:
+  postgres_password:     { file: ./secrets/local/postgres_password }
+  mongo_password:        { file: ./secrets/local/mongo_password }
+  rabbitmq_password:     { file: ./secrets/local/rabbitmq_password }
+  minio_password:        { file: ./secrets/local/minio_password }
+  pii_encryption_key:    { file: ./secrets/local/pii_encryption_key }
+  jwt_private_key.pem:   { file: ./secrets/local/jwt_private_key.pem }
+  jwt_public_key.pem:    { file: ./secrets/local/jwt_public_key.pem }
+  r2_account_id:         { file: ./secrets/local/r2_account_id }
+  r2_access_key_id:      { file: ./secrets/local/r2_access_key_id }
+  r2_secret_access_key:  { file: ./secrets/local/r2_secret_access_key }
+
+volumes:
+  pgdata:
+  mongodata:
+  rabbitdata:
+  miniodata:

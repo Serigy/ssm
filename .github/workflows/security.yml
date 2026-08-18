@@ -1,0 +1,109 @@
+name: Segurança
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # Weekly, because a dependency that was clean on merge day may not be a
+    # month later — most CVEs are published against code nobody has touched.
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  aikido:
+    name: Aikido
+    runs-on: ubuntu-latest
+    # Forked PRs cannot read the token; the scan runs again after merge.
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Varredura Aikido
+        uses: AikidoSec/github-actions-workflow@v1
+        with:
+          secret-key: ${{ secrets.AIKIDO_SECRET_KEY }}
+          # Blocks the merge on a genuinely exploitable issue rather than on
+          # every advisory — a gate that always fires gets bypassed.
+          fail-on-dependency-scan: true
+          fail-on-sast-scan: true
+          fail-on-iac-scan: true
+          minimum-severity: 'HIGH'
+          post-scan-status-comment: 'on'
+
+  dependencies:
+    name: Dependências
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Auditoria
+        run: pnpm audit --audit-level=high
+
+      - name: Verificar licenças
+        # A copyleft licence entering a proprietary product is a legal problem,
+        # not a technical one, and it is far cheaper to catch at the PR.
+        run: |
+          npx license-checker-rseidelsohn --production --summary \
+            --failOn 'GPL-2.0;GPL-3.0;AGPL-1.0;AGPL-3.0;SSPL-1.0' || \
+            echo "::warning::Licença restritiva encontrada — avalie antes de aprovar."
+
+  containers:
+    name: Imagens
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [gateway, identity-svc, financial-svc, hr-svc, legal-svc]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/service.Dockerfile
+          build-args: APP=${{ matrix.app }}
+          load: true
+          tags: scan/${{ matrix.app }}:ci
+          cache-from: type=gha,scope=${{ matrix.app }}
+
+      - name: Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: scan/${{ matrix.app }}:ci
+          format: sarif
+          output: trivy-${{ matrix.app }}.sarif
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-${{ matrix.app }}.sarif
+          category: trivy-${{ matrix.app }}
+
+  secrets-scan:
+    name: Segredos vazados
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Scan the whole history, not just the diff: a secret committed and
+          # then removed is still in the objects and still compromised.
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

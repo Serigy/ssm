@@ -1,0 +1,68 @@
+{{- $root := . }}
+{{- range $name, $web := .Values.web }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ssm.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  replicas: {{ $web.replicas | default 1 }}
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $root.Release.Name }}
+      app.kubernetes.io/component: {{ $name }}
+  template:
+    metadata:
+      labels:
+        {{- include "ssm.labels" $root | nindent 8 }}
+        app.kubernetes.io/component: {{ $name }}
+    spec:
+      serviceAccountName: {{ include "ssm.serviceAccountName" $root }}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: {{ $name }}
+          image: "{{ $root.Values.image.registry }}/{{ $name }}:{{ $root.Values.image.tag }}"
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            # nginx writes its pid and its temp bodies; both point at /tmp so
+            # the image itself can stay read-only.
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /var/cache/nginx
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits:   { cpu: 200m, memory: 128Mi }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 16Mi }
+        - name: cache
+          emptyDir: { sizeLimit: 64Mi }
+{{- end }}

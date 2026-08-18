@@ -1,0 +1,157 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  # A new push supersedes the run in flight for the same branch.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # Fast, cheap, and blocks everything else: if a secret is committed, nothing
+  # about the rest of the run matters.
+  guard:
+    name: Guardas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Nada sensível rastreado pelo git
+        run: |
+          leaked=$(git ls-files secrets/ \
+            | grep -v -E '^secrets/(README\.md|\.gitignore|example/)' || true)
+          if [[ -n "$leaked" ]]; then
+            echo "::error::Arquivos de segredo rastreados pelo git:"
+            echo "$leaked"
+            exit 1
+          fi
+          echo "OK — apenas templates e documentação sob secrets/."
+
+      - name: Sem .env no repositório
+        run: |
+          found=$(git ls-files | grep -E '(^|/)\.env(\..*)?$' | grep -v '\.env\.example$' || true)
+          if [[ -n "$found" ]]; then
+            echo "::error::SSM usa secrets/ em vez de .env. Encontrado: $found"
+            exit 1
+          fi
+
+  check:
+    name: Lint, tipos e testes
+    runs-on: ubuntu-latest
+    needs: guard
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Nx affected needs history to diff against the base branch.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Gerar segredos de teste
+        # The build imports code that reads the JWT public key at module init.
+        run: ./scripts/gen-secrets.sh
+
+      - uses: nrwl/nx-set-shas@v4
+
+      - name: Verificar apenas o que mudou
+        run: pnpm nx affected -t lint,typecheck,test,build --parallel=3
+        env:
+          SSM_SECRETS_DIR: ${{ github.workspace }}/secrets/local
+
+      - name: Especificações OpenAPI atualizadas
+        # A contract change that is not committed means clients are generated
+        # from a stale spec. Catching it here is cheaper than at integration.
+        run: |
+          pnpm nx run-many -t openapi || true
+          if ! git diff --quiet --exit-code docs/api/; then
+            echo "::error::As especificações em docs/api/ estão desatualizadas. Rode 'make openapi' e faça commit."
+            git diff --stat docs/api/
+            exit 1
+          fi
+        env:
+          SSM_SECRETS_DIR: ${{ github.workspace }}/secrets/local
+
+  charts:
+    name: Helm e Terraform
+    runs-on: ubuntu-latest
+    needs: guard
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+      - name: Validar o chart
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm dependency build deploy/helm/ssm
+          helm lint deploy/helm/ssm --values deploy/helm/ssm/values-kind.yaml
+          helm template ssm deploy/helm/ssm \
+            --values deploy/helm/ssm/values-kind.yaml --namespace ssm > /tmp/rendered.yaml
+          echo "Renderizados $(grep -c '^kind:' /tmp/rendered.yaml) manifestos."
+
+      - name: Validar os manifestos renderizados
+        uses: docker://ghcr.io/yannh/kubeconform:latest
+        with:
+          args: -strict -summary -ignore-missing-schemas /tmp/rendered.yaml
+
+      - uses: hashicorp/setup-terraform@v3
+      - name: Validar o Terraform
+        run: |
+          terraform -chdir=deploy/terraform fmt -check -recursive
+          terraform -chdir=deploy/terraform init -backend=false
+          terraform -chdir=deploy/terraform validate
+
+      - name: Verificar a sintaxe do Ansible
+        run: |
+          pipx install ansible-core
+          ansible-playbook --syntax-check \
+            -i deploy/ansible/inventory/hosts.yml deploy/ansible/site.yml
+
+  images:
+    name: Imagens
+    runs-on: ubuntu-latest
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [gateway, identity-svc, financial-svc, hr-svc, legal-svc]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Construir ${{ matrix.app }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/service.Dockerfile
+          build-args: APP=${{ matrix.app }}
+          # Build only on a PR; publishing happens on the release workflow.
+          push: false
+          load: true
+          tags: ssm/${{ matrix.app }}:ci
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      - name: Confirmar que a imagem não roda como root
+        run: |
+          user=$(docker image inspect ssm/${{ matrix.app }}:ci --format '{{.Config.User}}')
+          if [[ "$user" != "10001:10001" ]]; then
+            echo "::error::A imagem roda como '$user'. Deve ser 10001:10001."
+            exit 1
+          fi
+          echo "OK — usuário $user."

@@ -1,0 +1,31 @@
+---
+- name: Adicionar o repositório do Kubernetes
+  ansible.builtin.deb822_repository:
+    name: kubernetes
+    types: [deb]
+    uris: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/"
+    suites: ["/"]
+    signed_by: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/Release.key"
+    state: present
+    enabled: true
+
+- name: Instalar o kubectl
+  ansible.builtin.apt:
+    name: kubectl
+    state: present
+    update_cache: true
+
+- name: Fixar a versão do kubectl
+  ansible.builtin.dpkg_selections:
+    name: kubectl
+    # An unplanned kubectl upgrade can skew past the API server's supported
+    # range and break every deploy at once.
+    selection: hold
+
+- name: Instalar o Helm
+  ansible.builtin.unarchive:
+    src: "https://get.helm.sh/helm-v{{ helm_version }}-linux-amd64.tar.gz"
+    dest: /usr/local/bin
+    remote_src: true
+    extra_opts: [--strip-components=1]
+    creates: /usr/local/bin/helm

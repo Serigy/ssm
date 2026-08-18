@@ -1,0 +1,53 @@
+---
+# Prepares a host to run SSM.
+#
+# Scope is deliberately narrow: Ansible gets the machine ready — packages,
+# hardening, Docker, the Kubernetes tooling — and stops there. The application
+# itself is a Helm release, because a rolling deploy is Kubernetes' job and
+# expressing it in Ansible would mean reimplementing it badly.
+#
+#   make ansible-check   # dry run, shows the diff
+#   make ansible-apply
+
+- name: Preparar host SSM
+  hosts: ssm_hosts
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Confirmar distribuição suportada
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['os_family'] == 'Debian'
+          - ansible_facts['distribution_major_version'] | int >= 24
+        fail_msg: >-
+          Estes playbooks foram escritos para Ubuntu 24.04+.
+          Encontrado {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}.
+
+    - name: Confirmar recursos mínimos
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['memtotal_mb'] | int >= 7500
+          - ansible_facts['processor_vcpus'] | int >= 2
+        fail_msg: >-
+          O host tem {{ ansible_facts['memtotal_mb'] }}MB e
+          {{ ansible_facts['processor_vcpus'] }} vCPU. O mínimo é 8GB / 2 vCPU —
+          abaixo disso os pods entram em OOMKill sob carga normal.
+
+  roles:
+    - role: common
+      tags: [common]
+    - role: docker
+      tags: [docker]
+    - role: k8s_tools
+      tags: [k8s]
+    - role: ssm_host
+      tags: [ssm]
+
+  post_tasks:
+    - name: Resumo
+      ansible.builtin.debug:
+        msg:
+          - "Host pronto: {{ inventory_hostname }}"
+          - "Docker: {{ docker_version.stdout | default('n/d') }}"
+          - "Próximo passo: implantar com Helm a partir do CI."

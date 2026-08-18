@@ -1,0 +1,273 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/hr/v1/employees": {
+      "get": {
+        "description": "Sem a permissão `hr:payroll:read` a resposta omite dado pessoal e salário — os campos não vêm nulos, vêm ausentes, para que um cliente não os confunda com \"sem valor\".",
+        "operationId": "Employees_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeePageDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lista colaboradores",
+        "tags": [
+          "employees"
+        ]
+      },
+      "post": {
+        "operationId": "Employees_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEmployeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E-mail corporativo já cadastrado."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cadastra um colaborador em onboarding",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/hr/v1/employees/{id}": {
+      "get": {
+        "operationId": "Employees_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Obtém um colaborador",
+        "tags": [
+          "employees"
+        ]
+      },
+      "put": {
+        "operationId": "Employees_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEmployeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Altera um colaborador",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/hr/v1/employees/{id}/activate": {
+      "post": {
+        "description": "Publica `hr.employee.hired`.",
+        "operationId": "Employees_activate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Conclui o onboarding",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/hr/v1/employees/{id}/offboard": {
+      "post": {
+        "description": "Mantém o cadastro como histórico e publica `hr.employee.offboarded`, que financeiro e jurídico consomem. Não há exclusão de colaborador.",
+        "operationId": "Employees_offboard",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OffboardEmployeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Desliga o colaborador",
+        "tags": [
+          "employees"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "SSM — Recursos Humanos",
+    "description": "Cadastro de colaboradores, estrutura organizacional e ciclo de vida do vínculo. Campos de dado pessoal só são devolvidos a quem tem `hr:payroll:read`; para os demais a resposta é a projeção reduzida.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Serigy Platform",
+      "url": "https://ssm.serigy.io",
+      "email": "platform@serigy.io"
+    }
+  },
+  "tags": [
+    {
+      "name": "employees",
+      "description": "Colaboradores e ciclo de vida do vínculo"
+    },
+    {
+      "name": "departments",
+      "description": "Estrutura organizacional"
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local gateway"
+    },
+    {
+      "url": "https://ssm.local",
+      "description": "kind cluster"
+    },
+    {
+      "url": "https://api.ssm.serigy.io",
+      "description": "Production"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "in": "header"
+      }
+    },
+    "schemas": {
+      "EmployeePageDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateEmployeeDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "EmployeeDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateEmployeeDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "OffboardEmployeeDto": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  }
+}

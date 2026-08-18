@@ -1,0 +1,138 @@
+# Defaults, written for a real cluster. values-kind.yaml overrides what a laptop
+# cannot honour (replica counts, anti-affinity, in-cluster datastores).
+
+global:
+  environment: production
+  domain: ssm.serigy.io
+
+image:
+  registry: ghcr.io/serigy
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# Name of the Secret mounted at /run/secrets. Its keys are file names, which is
+# exactly the layout of secrets/local/ — see secrets/README.md.
+secretName: ssm-secrets
+
+# Non-secret configuration. Anything sensitive belongs in the Secret above.
+config:
+  logLevel: info
+  jwtIssuer: https://ssm.serigy.io
+  jwtAudience: ssm
+  accessTokenTtlSeconds: 900
+  refreshTokenTtlSeconds: 1209600
+  r2:
+    endpoint: ""          # derived from the account id when empty
+    bucket: ssm-documents
+    region: auto
+  zen:
+    enabled: true
+    # Blocking on in production; the report-only rollout happens in staging.
+    blocking: true
+
+# Applied to every service unless a service overrides it.
+defaults:
+  replicas: 2
+  resources:
+    requests: { cpu: 100m, memory: 192Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+services:
+  gateway:
+    port: 3000
+    replicas: 3
+    resources:
+      requests: { cpu: 200m, memory: 256Mi }
+      limits:   { cpu: 1000m, memory: 768Mi }
+  identity-svc:
+    port: 3001
+    database: ssm_identity
+    # The only workload that gets the signing key.
+    secretKeys: [postgres_password, rabbitmq_password, jwt_private_key.pem, jwt_public_key.pem]
+  financial-svc:
+    port: 3002
+    database: ssm_financial
+    secretKeys:
+      [postgres_password, rabbitmq_password, jwt_public_key.pem,
+       r2_account_id, r2_access_key_id, r2_secret_access_key]
+  hr-svc:
+    port: 3003
+    database: ssm_hr
+    secretKeys:
+      [postgres_password, rabbitmq_password, jwt_public_key.pem, pii_encryption_key,
+       r2_account_id, r2_access_key_id, r2_secret_access_key]
+  legal-svc:
+    port: 3004
+    engine: mongodb
+    database: ssm_legal
+    secretKeys:
+      [mongo_password, rabbitmq_password, jwt_public_key.pem,
+       r2_account_id, r2_access_key_id, r2_secret_access_key]
+
+# Static bundles. Each remote is served under the path its build was compiled
+# for — changing one without the other breaks federation at runtime.
+web:
+  shell:
+    path: /
+    replicas: 2
+  mfe-financial:
+    path: /financeiro
+    replicas: 2
+  mfe-hr:
+    path: /pessoas
+    replicas: 2
+  mfe-legal:
+    path: /juridico
+    replicas: 2
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "2m"
+    nginx.ingress.kubernetes.io/enable-cors: "false"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    enabled: true
+    secretName: ssm-tls
+
+postgres:
+  host: ssm-postgresql
+  port: 5432
+  user: ssm
+  ssl: true
+
+mongo:
+  host: ssm-mongodb
+  port: 27017
+  user: ssm
+
+rabbitmq:
+  host: ssm-rabbitmq
+  port: 5672
+  user: ssm
+  vhost: /
+
+# Bundled datastores — off by default. Production points at managed services.
+postgresql:
+  enabled: false
+mongodb:
+  enabled: false
+rabbitmq:
+  enabled: false
+
+networkPolicy:
+  enabled: true
+
+serviceAccount:
+  create: true
+  annotations: {}

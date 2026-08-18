@@ -1,0 +1,20 @@
+{
+  "name": "@ssm/mfe-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@ssm/contracts": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.5.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "vite": "^6.3.3"
+  }
+}

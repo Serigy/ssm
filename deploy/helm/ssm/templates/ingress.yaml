@@ -1,0 +1,54 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "ssm.fullname" . }}
+  labels: {{- include "ssm.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.global.domain | quote }}]
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.global.domain | quote }}
+      http:
+        paths:
+          # --- API ----------------------------------------------------------
+          # Everything under /api goes to the gateway, which fans out to the
+          # services. One origin for the browser means cookies and CORS have a
+          # single, simple answer.
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port: { number: {{ .Values.services.gateway.port }} }
+
+          # --- Micro-frontends ----------------------------------------------
+          # Each remote is served from the exact path its bundle was built for.
+          # remoteEntry.js resolves sibling chunks relative to this prefix, so a
+          # mismatch here produces 404s only after a deploy — list the specific
+          # paths before the shell's catch-all "/".
+          {{- range $name, $web := .Values.web }}
+          {{- if ne $web.path "/" }}
+          - path: {{ $web.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $name }}
+                port: { number: 80 }
+          {{- end }}
+          {{- end }}
+
+          # --- Shell (catch-all, must be last) ------------------------------
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: shell
+                port: { number: 80 }
+{{- end }}

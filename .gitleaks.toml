@@ -1,0 +1,24 @@
+# Gitleaks configuration for SSM.
+title = "SSM"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "ssm-jwt-private-key"
+description = "Chave privada de assinatura JWT"
+regex = '''-----BEGIN (RSA )?PRIVATE KEY-----'''
+tags = ["key", "jwt"]
+
+[allowlist]
+description = "Templates e documentação — placeholders, não segredos"
+paths = [
+  '''secrets/example/.*''',
+  '''secrets/README\.md''',
+  '''docs/security/.*\.md''',
+  '''.*\.example$''',
+]
+regexes = [
+  '''REPLACE_ME_.*''',
+  '''REPLACE ME''',
+]

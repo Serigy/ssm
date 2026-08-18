@@ -1,0 +1,102 @@
+{{- if .Values.networkPolicy.enabled }}
+# Default deny, then open exactly what is needed.
+#
+# The rule that matters: a module service accepts traffic from the gateway and
+# from nothing else. Without this, a compromised frontend pod could call
+# hr-svc directly and skip the gateway's rate limiting entirely.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ssm.fullname" . }}-default-deny
+  labels: {{- include "ssm.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+
+---
+# DNS, for every pod. Without this the default-deny above breaks name resolution
+# and every service fails to find Postgres.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ssm.fullname" . }}-allow-dns
+  labels: {{- include "ssm.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+---
+# The gateway is the only workload the Ingress may reach for /api.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ssm.fullname" . }}-gateway
+  labels: {{- include "ssm.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: gateway
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+      ports:
+        - protocol: TCP
+          port: {{ .Values.services.gateway.port }}
+  egress:
+    # Only to the module services and the broker.
+    - to:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/part-of: ssm }
+    - to:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: rabbitmq }
+
+{{- range $name, $svc := .Values.services }}
+{{- if ne $name "gateway" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ssm.fullname" $ }}-{{ $name }}
+  labels: {{- include "ssm.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: {{ $name }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # Only the gateway. No module service talks to another over HTTP — they
+    # communicate through RabbitMQ, and this makes that architectural rule
+    # enforceable rather than merely documented.
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/component: gateway }
+      ports:
+        - protocol: TCP
+          port: {{ $svc.port }}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: {{ if eq ($svc.engine | default "postgres") "mongodb" }}mongodb{{ else }}postgresql{{ end }} }
+    - to:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: rabbitmq }
+    # R2 is outside the cluster, so HTTPS egress has to be allowed.
+    - ports:
+        - protocol: TCP
+          port: 443
+{{- end }}
+{{- end }}
+{{- end }}

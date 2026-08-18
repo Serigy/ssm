@@ -1,0 +1,9 @@
+/* Single entry point. An app imports exactly this and gets the whole system.
+   Token files are verbatim copies from the Serigy Design System — see tokens/README.md. */
+@import './tokens/fonts.css';
+@import './tokens/colors.css';
+@import './tokens/typography.css';
+@import './tokens/spacing.css';
+@import './tokens/effects.css';
+@import './tokens/base.css';
+@import './components.css';

@@ -1,0 +1,140 @@
+{{- $root := . }}
+{{- range $name, $svc := .Values.services }}
+{{- $defaults := $root.Values.defaults }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ssm.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  {{- if not $defaults.autoscaling.enabled }}
+  replicas: {{ $svc.replicas | default $defaults.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Never take capacity away during a deploy; add one, then remove one.
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $root.Release.Name }}
+      app.kubernetes.io/component: {{ $name }}
+  template:
+    metadata:
+      labels:
+        {{- include "ssm.labels" $root | nindent 8 }}
+        app.kubernetes.io/component: {{ $name }}
+      annotations:
+        # Rolls the pods whenever the secret contents change, so a rotated
+        # credential takes effect without anyone remembering to restart.
+        checksum/secret: {{ $root.Values.secretName | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "ssm.serviceAccountName" $root }}
+      automountServiceAccountToken: false
+      securityContext: {{- include "ssm.podSecurityContext" $root | nindent 8 }}
+      {{- with $root.Values.image.pullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- if $defaults.podDisruptionBudget.enabled }}
+      affinity:
+        podAntiAffinity:
+          # Preferred, not required: on a two-node cluster a hard rule would
+          # leave the third replica permanently Pending.
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/component: {{ $name }}
+      {{- end }}
+
+      # Long enough for the AMQP channel to drain its acks and in-flight HTTP
+      # requests to finish; Nest's shutdown hooks do the rest.
+      terminationGracePeriodSeconds: 45
+
+      containers:
+        - name: {{ $name }}
+          image: "{{ $root.Values.image.registry }}/{{ $name }}:{{ $root.Values.image.tag }}"
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          securityContext: {{- include "ssm.containerSecurityContext" $root | nindent 12 }}
+
+          ports:
+            - name: http
+              containerPort: {{ $svc.port }}
+              protocol: TCP
+
+          env:
+            - name: PORT
+              value: {{ $svc.port | quote }}
+            {{- include "ssm.commonEnv" (dict "root" $root "svc" $svc) | nindent 12 }}
+            {{- if eq $name "gateway" }}
+            {{- range $target, $t := $root.Values.services }}
+            {{- if ne $target "gateway" }}
+            - name: {{ $target | upper | replace "-SVC" "" | replace "-" "_" }}_URL
+              value: "http://{{ $target }}:{{ $t.port }}"
+            {{- end }}
+            {{- end }}
+            {{- end }}
+
+          volumeMounts:
+            - name: secrets
+              mountPath: /run/secrets
+              readOnly: true
+            # The root filesystem is read-only, so anything that needs scratch
+            # space gets an explicit emptyDir.
+            - name: tmp
+              mountPath: /tmp
+
+          # Three probes, three meanings — see the health controller. A database
+          # outage must fail readiness, never liveness, or Kubernetes will
+          # restart perfectly healthy pods for the duration of the incident.
+          startupProbe:
+            httpGet: { path: /health/startup, port: http }
+            failureThreshold: 30
+            periodSeconds: 2
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+
+          lifecycle:
+            preStop:
+              # Gives the Ingress time to notice the pod left the endpoint list
+              # before the process starts refusing connections.
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+
+          resources:
+            {{- toYaml ($svc.resources | default $defaults.resources) | nindent 12 }}
+
+      volumes:
+        - name: secrets
+          secret:
+            secretName: {{ $root.Values.secretName }}
+            defaultMode: 0400
+            {{- with $svc.secretKeys }}
+            # Each service receives only the secrets it uses. identity-svc is
+            # the only one that ever sees the JWT private key.
+            items:
+              {{- range . }}
+              - key: {{ . }}
+                path: {{ . }}
+              {{- end }}
+            {{- end }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+{{- end }}

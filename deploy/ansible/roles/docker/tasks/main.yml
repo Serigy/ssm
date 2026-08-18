@@ -1,0 +1,52 @@
+---
+- name: Adicionar o repositório do Docker
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: [deb]
+    uris: https://download.docker.com/linux/ubuntu
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [stable]
+    architectures: ["{{ 'amd64' if ansible_facts['architecture'] == 'x86_64' else 'arm64' }}"]
+    signed_by: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+    enabled: true
+
+- name: Instalar o Docker Engine
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: true
+
+- name: Configurar o daemon
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "50m", "max-file": "3" },
+        "live-restore": true,
+        "userland-proxy": false,
+        "no-new-privileges": true,
+        "default-ulimits": {
+          "nofile": { "Name": "nofile", "Hard": 65536, "Soft": 65536 }
+        }
+      }
+  notify: Restart docker
+
+- name: Adicionar usuários ao grupo docker
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  loop: "{{ docker_users }}"
+
+- name: Registrar a versão instalada
+  ansible.builtin.command: docker --version
+  register: docker_version
+  changed_when: false

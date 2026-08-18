@@ -1,0 +1,134 @@
+# ---------------------------------------------------------------------------
+# SSM — Serigy Service Manager
+# ---------------------------------------------------------------------------
+
+# --- Secrets -------------------------------------------------------------
+# Everything under secrets/ is ignored EXCEPT the committed templates and docs.
+# Never remove these rules. See secrets/README.md.
+/secrets/*
+!/secrets/README.md
+!/secrets/.gitignore
+!/secrets/example/
+/secrets/example/**/*.local
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+!/secrets/example/*.pem.example
+.env
+.env.*
+!.env.example
+
+# --- Node ----------------------------------------------------------------
+node_modules/
+.pnpm-store/
+.pnp.*
+.yarn/*
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# --- Build output --------------------------------------------------------
+dist/
+build/
+out/
+out-tsc/
+.next/
+.nuxt/
+.output/
+.vite/
+.swc/
+*.tsbuildinfo
+storybook-static/
+
+# --- Nx ------------------------------------------------------------------
+.nx/cache
+.nx/workspace-data
+.nx/installation
+migrations.json
+
+# --- Test & coverage -----------------------------------------------------
+coverage/
+.nyc_output/
+junit.xml
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# --- Terraform -----------------------------------------------------------
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+.terraform.lock.hcl.bak
+tfplan
+*.tfplan
+
+# --- Ansible -------------------------------------------------------------
+deploy/ansible/*.retry
+deploy/ansible/inventory/*.local.yml
+deploy/ansible/vault_pass.txt
+deploy/ansible/.vault_pass
+deploy/ansible/collections/
+deploy/ansible/roles/external/
+
+# --- Kubernetes / Helm ---------------------------------------------------
+deploy/helm/**/charts/*.tgz
+deploy/helm/**/Chart.lock
+kubeconfig
+kubeconfig.*
+*.kubeconfig
+
+# --- Docker --------------------------------------------------------------
+.docker/
+docker-compose.override.yml
+
+# --- Databases / local volumes ------------------------------------------
+.data/
+pgdata/
+mongodata/
+rabbitmqdata/
+*.sqlite
+*.sqlite3
+*.db
+
+# --- Editors & OS --------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.shared.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Logs & tmp ----------------------------------------------------------
+logs/
+*.log
+tmp/
+temp/
+.cache/
+
+# --- Claude Code ---------------------------------------------------------
+.claude/settings.local.json
+.claude/local/
+
+# --- Generated local config ----------------------------------------------
+# Derived from secrets/local/ by scripts/gen-secrets.sh.
+deploy/local/generated/

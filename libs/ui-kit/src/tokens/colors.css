@@ -1,0 +1,76 @@
+:root {
+  /* ---- Verde Serigy (primária, hue ~160) ---- */
+  --green-50:  #EAF7F0;
+  --green-100: #CDEDDD;
+  --green-200: #A2DEC1;
+  --green-300: #6DCA9F;
+  --green-400: #3FB682;
+  --green-500: #1F9C68;
+  --green-600: #157C53;
+  --green-700: #125F41;
+  --green-800: #0E4531;
+  --green-900: #0B2E22;
+  --green-950: #06201A;
+
+  /* ---- Coral Serigy (única cor secundária, para marketing) ---- */
+  --coral-100: #FFE3DA;
+  --coral-300: #FFAF97;
+  --coral-500: #F0603C;
+  --coral-600: #D24A29;
+  --coral-700: #A5361B;
+
+  /* ---- Neutros levemente esverdeados ---- */
+  --neutral-0:   #FFFFFF;
+  --neutral-25:  #FAFBFA;
+  --neutral-50:  #F4F6F4;
+  --neutral-100: #E9EDEA;
+  --neutral-200: #D6DCD8;
+  --neutral-300: #B8C1BC;
+  --neutral-400: #8E9A94;
+  --neutral-500: #6B7772;
+  --neutral-600: #4E5A55;
+  --neutral-700: #3A443F;
+  --neutral-800: #262E2A;
+  --neutral-900: #161C19;
+
+  /* ---- Estados ---- */
+  --state-success: #157C53;
+  --state-warning: #B07D06;
+  --state-danger:  #C13A2C;
+  --state-info:    #24708F;
+  --state-success-bg: #EAF7F0;
+  --state-warning-bg: #FBF3DC;
+  --state-danger-bg:  #FBE9E6;
+  --state-info-bg:    #E6F1F6;
+
+  /* ---- Aliases semânticos: texto ---- */
+  --text-strong:   var(--green-950);
+  --text-body:     var(--neutral-800);
+  --text-muted:    var(--neutral-500);
+  --text-inverse:  var(--neutral-0);
+  --text-brand:    var(--green-600);
+  --text-on-brand: var(--neutral-0);
+  --text-link:     var(--green-600);
+  --text-link-hover: var(--green-800);
+
+  /* ---- Aliases semânticos: superfícies ---- */
+  --surface-page:     var(--neutral-25);
+  --surface-card:     var(--neutral-0);
+  --surface-sunken:   var(--neutral-50);
+  --surface-brand:    var(--green-500);
+  --surface-brand-strong: var(--green-800);
+  --surface-inverse:  var(--green-950);
+  --surface-accent:   var(--coral-500);
+  --surface-hover:    var(--neutral-50);
+  --surface-selected: var(--green-50);
+
+  /* ---- Aliases semânticos: bordas ---- */
+  --border-subtle: var(--neutral-100);
+  --border-default: var(--neutral-200);
+  --border-strong: var(--neutral-400);
+  --border-brand:  var(--green-500);
+  --border-inverse: rgba(255,255,255,.18);
+
+  /* ---- Foco ---- */
+  --focus-ring: var(--green-400);
+}

@@ -1,0 +1,427 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/legal/v1/contracts": {
+      "get": {
+        "operationId": "Contracts_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractPageDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lista contratos",
+        "tags": [
+          "contracts"
+        ]
+      },
+      "post": {
+        "operationId": "Contracts_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateContractDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cria um contrato em rascunho",
+        "tags": [
+          "contracts"
+        ]
+      }
+    },
+    "/api/legal/v1/contracts/expiring": {
+      "get": {
+        "description": "Mesma consulta que alimenta o aviso diário, para que painel e alerta não divirjam.",
+        "operationId": "Contracts_expiring",
+        "parameters": [
+          {
+            "name": "withinDays",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Contratos com vigência próxima do fim",
+        "tags": [
+          "contracts"
+        ]
+      }
+    },
+    "/api/legal/v1/contracts/{id}": {
+      "get": {
+        "operationId": "Contracts_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Obtém um contrato com a árvore de cláusulas",
+        "tags": [
+          "contracts"
+        ]
+      },
+      "put": {
+        "operationId": "Contracts_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateContractDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "409": {
+            "description": "Contrato ativo — registre um aditivo."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Altera os metadados de um contrato não assinado",
+        "tags": [
+          "contracts"
+        ]
+      }
+    },
+    "/api/legal/v1/contracts/{id}/amend": {
+      "post": {
+        "description": "Arquiva a árvore de cláusulas atual como versão e grava a nova. O histórico é mantido na íntegra — nunca em diffs — para reconstruir o texto vigente em qualquer data.",
+        "operationId": "Contracts_amend",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AmendContractDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Registra um aditivo",
+        "tags": [
+          "contracts"
+        ]
+      }
+    },
+    "/api/legal/v1/contracts/{id}/status": {
+      "post": {
+        "description": "Ativar publica `legal.contract.activated`, consumido pelo financeiro.",
+        "operationId": "Contracts_transition",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Altera o estado do contrato",
+        "tags": [
+          "contracts"
+        ]
+      }
+    },
+    "/api/legal/v1/contracts/{id}/document/upload-url": {
+      "post": {
+        "description": "O navegador envia o arquivo direto ao R2. O serviço nunca recebe o binário — nem em memória, nem em disco.",
+        "operationId": "Contracts_uploadUrl",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Emite uma URL assinada para envio do PDF",
+        "tags": [
+          "contracts"
+        ]
+      }
+    },
+    "/api/legal/v1/contracts/{id}/document": {
+      "post": {
+        "operationId": "Contracts_attach",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachDocumentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Confirma o envio e vincula o documento ao contrato",
+        "tags": [
+          "contracts"
+        ]
+      },
+      "get": {
+        "operationId": "Contracts_document",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Emite uma URL assinada de leitura para o PDF",
+        "tags": [
+          "contracts"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "SSM — Jurídico",
+    "description": "Contratos, cláusulas, obrigações e vigências. O documento assinado fica no R2; o MongoDB guarda a árvore de cláusulas e o histórico de versões. Ver docs/adr/0004-postgres-e-mongodb.md para o porquê da escolha.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Serigy Platform",
+      "url": "https://ssm.serigy.io",
+      "email": "platform@serigy.io"
+    }
+  },
+  "tags": [
+    {
+      "name": "contracts",
+      "description": "Ciclo de vida do contrato"
+    },
+    {
+      "name": "obligations",
+      "description": "Obrigações extraídas das cláusulas"
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local gateway"
+    },
+    {
+      "url": "https://ssm.local",
+      "description": "kind cluster"
+    },
+    {
+      "url": "https://api.ssm.serigy.io",
+      "description": "Production"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "in": "header"
+      }
+    },
+    "schemas": {
+      "ContractPageDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ContractDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateContractDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateContractDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AmendContractDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "TransitionDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UploadRequestDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AttachDocumentDto": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  }
+}

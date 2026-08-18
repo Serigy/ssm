@@ -1,0 +1,58 @@
+{
+  "name": "hr-svc",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/hr-svc/src",
+  "projectType": "application",
+  "tags": [
+    "scope:backend",
+    "module:hr"
+  ],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nest build -p apps/hr-svc/tsconfig.build.json && tsc-alias -p apps/hr-svc/tsconfig.build.json",
+        "cwd": "."
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nest start --watch -p apps/hr-svc/tsconfig.build.json",
+        "cwd": "."
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p apps/hr-svc/tsconfig.json --noEmit"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint apps/hr-svc/src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --root apps/hr-svc --passWithNoTests"
+      }
+    },
+    "openapi": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "SSM_EMIT_OPENAPI=docs/api/hr.openapi.json SSM_SECRETS_DIR=secrets/local node apps/hr-svc/dist/apps/hr-svc/src/main.js",
+        "cwd": "."
+      }
+    },
+    "container": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -f docker/service.Dockerfile --build-arg APP=hr-svc -t ssm/hr-svc:dev .",
+        "cwd": "."
+      }
+    }
+  }
+}

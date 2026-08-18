@@ -1,0 +1,39 @@
+{{- if .Values.defaults.autoscaling.enabled }}
+{{- $root := . }}
+{{- range $name, $svc := .Values.services }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ssm.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ $root.Values.defaults.autoscaling.minReplicas }}
+  maxReplicas: {{ $root.Values.defaults.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $root.Values.defaults.autoscaling.targetCPUUtilizationPercentage }}
+  behavior:
+    scaleUp:
+      # React quickly to load.
+      stabilizationWindowSeconds: 30
+    scaleDown:
+      # Retreat slowly. Scaling down eagerly on a traffic dip is how a spiky
+      # workload ends up thrashing between replica counts.
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+{{- end }}
+{{- end }}

@@ -1,0 +1,65 @@
+{
+  "name": "financial-svc",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/financial-svc/src",
+  "projectType": "application",
+  "tags": [
+    "scope:backend",
+    "module:financial"
+  ],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nest build -p apps/financial-svc/tsconfig.build.json && tsc-alias -p apps/financial-svc/tsconfig.build.json",
+        "cwd": "."
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nest start --watch -p apps/financial-svc/tsconfig.build.json",
+        "cwd": "."
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p apps/financial-svc/tsconfig.json --noEmit"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint apps/financial-svc/src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --root apps/financial-svc --passWithNoTests"
+      }
+    },
+    "openapi": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "SSM_EMIT_OPENAPI=docs/api/financial.openapi.json SSM_SECRETS_DIR=secrets/local node apps/financial-svc/dist/apps/financial-svc/src/main.js",
+        "cwd": "."
+      }
+    },
+    "container": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -f docker/service.Dockerfile --build-arg APP=financial-svc -t ssm/financial-svc:dev .",
+        "cwd": "."
+      }
+    },
+    "migration:run": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "SSM_SECRETS_DIR=secrets/local tsx node_modules/typeorm/cli.js migration:run -d apps/financial-svc/src/database/data-source.ts",
+        "cwd": "."
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+apiVersion: v2
+name: ssm
+description: SSM — Serigy Service Manager. Gateway, four services and four web apps.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords: [ssm, serigy, nestjs, micro-frontend]
+maintainers:
+  - name: Serigy Platform
+    email: platform@serigy.io
+
+# Postgres, MongoDB and RabbitMQ ship as dependencies so a kind cluster is one
+# command. Production disables all three — managed services are the right answer
+# for anything holding state you cannot lose.
+dependencies:
+  - name: postgresql
+    version: "16.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  - name: mongodb
+    version: "16.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: mongodb.enabled
+  - name: rabbitmq
+    version: "15.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: rabbitmq.enabled
