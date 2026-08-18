@@ -38,7 +38,8 @@ O sistema pede que qualquer desvio seja explícito. Estes são os do SSM:
 
 | Adição | Por quê |
 |---|---|
-| `Button` variante `danger` | O SSM cancela faturas e registra desligamentos. Não havia variante para ação irreversível. Reusa `--state-danger`, sem introduzir uma terceira cor de marca. |
+| `Button` variante `danger` | O SSM cancela faturas e registra desligamentos. Não havia variante para ação irreversível. Todos os tons derivam de `--state-danger`. |
+| `--state-danger-hover` e `--state-danger-active` | O sistema traz `--state-danger` mas nenhum passo mais escuro. Derivados com `color-mix` a partir dele, para que sigam a cor de estado se ela mudar. Ver a nota sobre o coral abaixo. |
 | `Metric`, `Panel`, `Table` promovidos ao ui-kit | O próprio `ui_kits/painel/README.md` previa: "Se o painel virar produto, promova-os a `components/data/`". O SSM é esse produto. |
 | `EmptyState`, `LoadingBar`, `Skeleton` | Toda tela precisa de estado vazio, de carregamento e de erro. A barra de 2px é a única animação em laço que o sistema permite. |
 | `AppShell` no ui-kit, não no shell | Para que um remote rodando isolado mostre a mesma moldura. Um módulo desenvolvido sozinho que não se parece com o produto montado é um problema encontrado tarde. |
@@ -50,8 +51,27 @@ O sistema pede que qualquer desvio seja explícito. Estes são os do SSM:
 **Três estados, sempre.** Vazio, carregando, erro. Uma tela sem os três não está
 pronta — o agente `qa` trata isso como defeito, não como sugestão.
 
-**O coral não entra no produto.** `--coral-*` é marketing. `Badge tone="accent"`
-existe no ui-kit e não tem uso legítimo dentro de um módulo.
+**O coral não entra no produto.** É a regra do sistema, literalmente: *"usado só
+em contextos de marketing — um CTA por página, números de destaque, um badge de
+campanha. Nunca em UI de produto."*
+
+O SSM é UI de produto do começo ao fim, então nenhuma tela usa coral. Os tokens
+estão presentes — cópia literal, como todo o resto — mas ficam sem uso. Isso é
+deliberado, não esquecimento: o ui-kit pode um dia servir uma superfície de
+marketing, e aí `Badge tone="accent"` é o único lugar por onde o coral entra.
+
+Isso já foi violado uma vez e vale registrar como se descobre: o hover do botão
+destrutivo usava `--coral-700`, porque o sistema não traz um passo mais escuro
+de `--state-danger` e o coral era o vermelho-alaranjado mais próximo à mão.
+
+Visualmente passava. Estruturalmente não: coral é cor **de marca** e
+`--state-danger` é cor **semântica**. Acoplá-las significa que uma decisão de
+marketing sobre a paleta coral mudaria, em silêncio, a aparência de "Cancelar
+fatura". As duas precisam poder mudar sozinhas. A correção foi derivar os tons
+escuros do próprio `--state-danger` com `color-mix`.
+
+A pergunta a se fazer diante de qualquer cor nova: *isto é marca ou é
+significado?* Se for significado, tem que vir de `--state-*` ou dos neutros.
 
 **Números em mono e tabulares.** Valores, quantidades e identificadores usam
 `.ssm-num`: `font-family: var(--font-mono)` com `font-variant-numeric:

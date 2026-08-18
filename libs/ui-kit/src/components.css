@@ -11,6 +11,28 @@
    Rules encoded here come from the design system readme — see docs/design/.
    =========================================================================== */
 
+/* --- Local tokens ---------------------------------------------------------
+   Declared additions, kept here rather than in tokens/ because that directory
+   is a verbatim copy of the design system and must stay byte-identical.
+   Each one is listed in docs/design/README.md. */
+:root {
+  /*
+   * Pressed and hover shades for the destructive action.
+   *
+   * The design system ships --state-danger but no darker step, and the first
+   * implementation reached for --coral-700 to fill the gap. That was wrong on
+   * the system's own terms — coral is marketing-only and never appears in
+   * product UI — and wrong structurally: it couples a destructive button's
+   * behaviour to a brand ramp, so a marketing decision about the coral would
+   * silently change how "Cancelar fatura" looks.
+   *
+   * Derived from --state-danger with color-mix, so it follows if the design
+   * system ever restates the danger colour.
+   */
+  --state-danger-hover: color-mix(in oklab, var(--state-danger) 85%, black);
+  --state-danger-active: color-mix(in oklab, var(--state-danger) 72%, black);
+}
+
 /* --- Button --------------------------------------------------------------- */
 .ssm-btn {
   display: inline-flex;
@@ -51,11 +73,19 @@
 .ssm-btn--ghost { background: transparent; color: var(--text-brand); }
 .ssm-btn--ghost:not(:disabled):hover { background: var(--surface-selected); }
 
-/* Destructive is an addition: SSM deletes invoices, employees and contracts,
-   and the prototype had no variant for an irreversible action. It reuses the
-   danger state colour rather than introducing a third brand colour. */
+/* Destructive is an addition: SSM voids invoices, offboards people and
+   terminates contracts, and the prototype had no variant for an irreversible
+   action. Every shade derives from --state-danger, so no brand colour enters
+   product UI. */
 .ssm-btn--danger { background: var(--state-danger); color: var(--neutral-0); }
-.ssm-btn--danger:not(:disabled):hover { background: var(--coral-700); }
+.ssm-btn--danger:not(:disabled):hover { background: var(--state-danger-hover); }
+.ssm-btn--danger:not(:disabled):active { background: var(--state-danger-active); }
+/* The focus ring is green everywhere else; on a destructive control that reads
+   as reassurance next to a red button. */
+.ssm-btn--danger:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--state-danger) 38%, transparent);
+  border-color: var(--state-danger);
+}
 
 /* On a dark surface (sidebar, inverse card) the hover lightens instead. */
 .ssm-on-inverse .ssm-btn--secondary,
