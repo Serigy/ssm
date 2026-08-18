@@ -12,8 +12,8 @@ NAMESPACE   ?= ssm
 REGISTRY    ?= ssm
 TAG         ?= dev
 
-SERVICES    := gateway identity-svc financial-svc hr-svc legal-svc
-WEBAPPS     := shell mfe-financial mfe-hr mfe-legal
+SERVICES    := gateway identity-svc financial-svc hr-svc legal-svc ops-svc
+WEBAPPS     := shell mfe-financial mfe-hr mfe-legal mfe-operations
 
 # Local runs read secrets from the repo instead of /run/secrets.
 export SSM_SECRETS_DIR ?= $(CURDIR)/secrets/local
@@ -66,7 +66,7 @@ dev: ## Build and start the whole stack
 
 .PHONY: web
 web: ## Run shell + the three remotes with hot reload
-	pnpm nx run-many -t serve -p shell mfe-financial mfe-hr mfe-legal --parallel=4
+	pnpm nx run-many -t serve -p shell mfe-financial mfe-hr mfe-legal mfe-operations --parallel=5
 
 .PHONY: infra
 infra: ## Start only the datastores (postgres, mongo, rabbitmq, minio)
@@ -117,7 +117,7 @@ wait-healthy: ## Block until every container reports healthy
 
 .PHONY: migrate
 migrate: ## Run migrations for every Postgres-backed service (in the containers)
-	@for svc in identity-svc financial-svc hr-svc; do \
+	@for svc in identity-svc financial-svc hr-svc ops-svc; do \
 	  echo "==> $$svc"; \
 	  $(COMPOSE) exec -T $$svc node node_modules/typeorm/cli.js \
 	    migration:run -d dist/data-source.js || \
@@ -126,11 +126,12 @@ migrate: ## Run migrations for every Postgres-backed service (in the containers)
 
 .PHONY: migrate-local
 migrate-local: ## Run migrations from the host against the compose databases
-	@for svc in identity-svc financial-svc hr-svc; do \
+	@for svc in identity-svc financial-svc hr-svc ops-svc; do \
 	  case $$svc in \
 	    identity-svc)  db=ssm_identity  ;; \
 	    financial-svc) db=ssm_financial ;; \
 	    hr-svc)        db=ssm_hr        ;; \
+	    ops-svc)       db=ssm_operations ;; \
 	  esac; \
 	  echo "==> $$svc -> $$db"; \
 	  ( cd apps/$$svc && \
@@ -243,6 +244,7 @@ web-images: ## Build the frontend images with their cluster paths baked in
 	  --build-arg REMOTE_FINANCIAL=/financeiro/remoteEntry.js \
 	  --build-arg REMOTE_HR=/pessoas/remoteEntry.js \
 	  --build-arg REMOTE_LEGAL=/juridico/remoteEntry.js \
+	  --build-arg REMOTE_OPERATIONS=/operacoes/remoteEntry.js \
 	  -t $(REGISTRY)/shell:$(TAG) .
 	docker build -f docker/web.Dockerfile --build-arg APP=mfe-financial \
 	  --build-arg PUBLIC_PATH=/financeiro/ -t $(REGISTRY)/mfe-financial:$(TAG) .
@@ -250,6 +252,8 @@ web-images: ## Build the frontend images with their cluster paths baked in
 	  --build-arg PUBLIC_PATH=/pessoas/ -t $(REGISTRY)/mfe-hr:$(TAG) .
 	docker build -f docker/web.Dockerfile --build-arg APP=mfe-legal \
 	  --build-arg PUBLIC_PATH=/juridico/ -t $(REGISTRY)/mfe-legal:$(TAG) .
+	docker build -f docker/web.Dockerfile --build-arg APP=mfe-operations \
+	  --build-arg PUBLIC_PATH=/operacoes/ -t $(REGISTRY)/mfe-operations:$(TAG) .
 
 ##@ Kubernetes (kind)
 

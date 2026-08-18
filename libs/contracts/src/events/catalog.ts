@@ -52,6 +52,44 @@ export const contractExpiringSchema = z.object({
   daysRemaining: z.number().int(),
 });
 
+// --- operations ------------------------------------------------------------
+export const incidentOpenedSchema = z.object({
+  ticketId: uuidSchema,
+  number: z.number().int(),
+  severity: z.enum(['sev1', 'sev2', 'sev3']),
+  environmentId: uuidSchema.nullable(),
+  environmentCode: z.string().nullable(),
+  responseDueAt: z.string().datetime({ offset: true }),
+});
+export const incidentResolvedSchema = z.object({
+  ticketId: uuidSchema,
+  number: z.number().int(),
+  environmentId: uuidSchema.nullable(),
+  minutesToResolve: z.number().int(),
+  responseBreached: z.boolean(),
+});
+export const environmentProvisionedSchema = z.object({
+  environmentId: uuidSchema,
+  code: z.string(),
+  kind: z.string(),
+  contractRef: z.string().nullable(),
+});
+/**
+ * The event that crosses the whole system: operations measured a month below
+ * the target the legal contract committed to, and financial owes the customer
+ * a credit for it.
+ */
+export const slaBreachedSchema = z.object({
+  environmentId: uuidSchema,
+  environmentCode: z.string(),
+  month: z.string(),
+  targetBps: z.number().int(),
+  achievedBps: z.number().int(),
+  downtimeMinutes: z.number().int(),
+  credit: moneySchema,
+  contractRef: z.string().nullable(),
+});
+
 export const EVENT_CATALOG = {
   'financial.invoice.issued': invoiceIssuedSchema,
   'financial.invoice.paid': invoicePaidSchema,
@@ -60,6 +98,10 @@ export const EVENT_CATALOG = {
   'hr.employee.offboarded': employeeOffboardedSchema,
   'legal.contract.activated': contractActivatedSchema,
   'legal.contract.expiring': contractExpiringSchema,
+  'operations.incident.opened': incidentOpenedSchema,
+  'operations.incident.resolved': incidentResolvedSchema,
+  'operations.environment.provisioned': environmentProvisionedSchema,
+  'operations.sla.breached': slaBreachedSchema,
 } as const;
 
 export type EventType = keyof typeof EVENT_CATALOG;

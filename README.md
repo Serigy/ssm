@@ -9,13 +9,14 @@ com micro-frontends federados em React.
 │  shell  ──carrega em runtime──▶  Financeiro │
 │                                  Pessoas    │
 │                                  Jurídico   │
+│                                  Operações  │
 └──────────────────┬──────────────────────────┘
                    │ /api
 ┌──────────────────▼──────────────────────────┐
 │  gateway                                    │
 ├─────────────────────────────────────────────┤
-│  identity   financial    hr        legal    │
-│  Postgres   Postgres     Postgres  MongoDB  │
+│ identity  financial   hr      legal    ops  │
+│ Postgres  Postgres  Postgres  MongoDB  Postgres│
 │         └──── RabbitMQ ────┘                │
 │              R2 (documentos)                │
 └─────────────────────────────────────────────┘
@@ -53,7 +54,7 @@ Depois `http://ssm.localhost` (adicione `127.0.0.1 ssm.localhost` ao `/etc/hosts
 
 | Caminho | O quê |
 |---|---|
-| `apps/` | 5 serviços NestJS, 1 shell, 3 remotes |
+| `apps/` | 6 serviços NestJS, 1 shell, 4 remotes |
 | `libs/contracts` | Tipos e eventos compartilhados — fonte da verdade |
 | `libs/nest-common` | Plataforma dos serviços: config, segredos, auth, bus, storage |
 | `libs/ui-kit` | Design System da Serigy em React |

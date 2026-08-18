@@ -13,7 +13,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN="$ROOT/.data/run"
 mkdir -p "$RUN"
 
-APPS=( "shell:4200" "mfe-financial:4201" "mfe-hr:4202" "mfe-legal:4203" )
+APPS=( "shell:4200" "mfe-financial:4201" "mfe-hr:4202" "mfe-legal:4203" "mfe-operations:4204" )
 
 pid_on_port() {
   ss -lptn "sport = :$1" 2>/dev/null | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2

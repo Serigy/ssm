@@ -41,6 +41,7 @@ test.describe('shell', () => {
       'Financeiro',
       'Pessoas',
       'Jurídico',
+      'Operações',
     ]);
   });
 
@@ -65,6 +66,7 @@ const MODULES = [
   { label: 'Financeiro', path: '/financeiro', title: 'Faturas', column: 'Número' },
   { label: 'Pessoas', path: '/pessoas', title: 'Colaboradores', column: 'Matrícula' },
   { label: 'Jurídico', path: '/juridico', title: 'Contratos', column: 'Referência' },
+  { label: 'Operações', path: '/operacoes', title: 'Chamados', column: 'Chamado' },
 ];
 
 test.describe('micro-frontends federados', () => {

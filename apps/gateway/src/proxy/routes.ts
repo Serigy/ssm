@@ -22,6 +22,7 @@ export const PROXY_ROUTES: ProxyRoute[] = [
   { prefix: '/api/financial', envVar: 'FINANCIAL_URL', fallback: 'http://financial-svc:3002' },
   { prefix: '/api/hr', envVar: 'HR_URL', fallback: 'http://hr-svc:3003' },
   { prefix: '/api/legal', envVar: 'LEGAL_URL', fallback: 'http://legal-svc:3004', timeoutMs: 30_000 },
+  { prefix: '/api/operations', envVar: 'OPERATIONS_URL', fallback: 'http://ops-svc:3005' },
 ];
 
 export function upstreamFor(route: ProxyRoute): string {

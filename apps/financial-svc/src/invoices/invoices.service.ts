@@ -382,16 +382,25 @@ export class InvoicesService {
   /**
    * Gapless per-tenant sequence. A Postgres sequence would be faster but leaves
    * gaps on rollback, and tax authorities in several jurisdictions treat a gap
-   * in invoice numbering as a finding. The row lock taken above serialises this.
+   * in invoice numbering as a finding.
+   *
+   * Serialised with a transaction-scoped advisory lock keyed on the tenant and
+   * year. The earlier version locked the highest existing row instead, which
+   * works only once there IS one: the first two concurrent issues of a year
+   * would both compute 00001 and one would die on the unique index with a 500.
+   * An advisory lock exists whether or not there are rows, and is released at
+   * commit without anyone remembering to.
    */
   private async nextNumber(tx: EntityManager, tenantId: string): Promise<string> {
     const year = new Date().getFullYear();
     const prefix = `FAT-${year}-`;
+
+    await tx.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`invoices:${tenantId}:${year}`]);
+
     const [row] = (await tx.query(
       `SELECT number FROM invoices
         WHERE tenant_id = $1 AND number LIKE $2
-        ORDER BY number DESC LIMIT 1
-        FOR UPDATE`,
+        ORDER BY number DESC LIMIT 1`,
       [tenantId, `${prefix}%`],
     )) as Array<{ number: string }>;
 

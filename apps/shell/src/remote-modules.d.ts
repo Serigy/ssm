@@ -30,3 +30,8 @@ declare module 'legal/Module' {
   const definition: import('@ssm/mfe-runtime').SsmModuleDefinition;
   export default definition;
 }
+
+declare module 'operations/Module' {
+  const definition: import('@ssm/mfe-runtime').SsmModuleDefinition;
+  export default definition;
+}

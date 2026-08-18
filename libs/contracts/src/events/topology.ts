@@ -23,9 +23,12 @@ export const RABBIT_TOPOLOGY = {
 
 /** Bindings each service declares. Keep in sync with the consumers it registers. */
 export const SERVICE_BINDINGS: Record<string, readonly string[]> = {
-  'financial-svc': ['hr.employee.*', 'legal.contract.activated'],
+  // The SLA credit is the one event that reaches across three modules: legal
+  // sets the target, operations measures it, financial pays it back.
+  'financial-svc': ['hr.employee.*', 'legal.contract.activated', 'operations.sla.breached'],
   'hr-svc': ['financial.payroll.*'],
   'legal-svc': ['financial.invoice.issued', 'hr.employee.offboarded'],
+  'ops-svc': ['legal.contract.activated', 'legal.contract.expiring', 'hr.employee.offboarded'],
   'identity-svc': ['#'],
   gateway: [],
 };

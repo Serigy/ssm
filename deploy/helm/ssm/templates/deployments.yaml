@@ -77,7 +77,7 @@ spec:
             {{- if eq $name "gateway" }}
             {{- range $target, $t := $root.Values.services }}
             {{- if ne $target "gateway" }}
-            - name: {{ $target | upper | replace "-SVC" "" | replace "-" "_" }}_URL
+            - name: {{ $target | upper | replace "OPS-SVC" "OPERATIONS" | replace "-SVC" "" | replace "-" "_" }}_URL
               value: "http://{{ $target }}:{{ $t.port }}"
             {{- end }}
             {{- end }}

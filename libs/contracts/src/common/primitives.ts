@@ -30,5 +30,5 @@ export const auditSchema = z.object({
 });
 export type Audit = z.infer<typeof auditSchema>;
 
-export const SSM_MODULES = ['financial', 'hr', 'legal'] as const;
+export const SSM_MODULES = ['financial', 'hr', 'legal', 'operations'] as const;
 export type SsmModule = (typeof SSM_MODULES)[number];

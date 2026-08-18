@@ -39,7 +39,7 @@ export interface RemoteRootProps {
  */
 export interface SsmModuleDefinition {
   /** Must match the remote's name in the shell's federation config. */
-  id: 'financial' | 'hr' | 'legal';
+  id: 'financial' | 'hr' | 'legal' | 'operations';
   /** Shown in the sidebar. Sentence case. */
   label: string;
   /** Mount path owned by this module, e.g. "/financial". */

@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { Client } from 'pg';
 import { MongoClient } from 'mongodb';
 import argon2 from 'argon2';
+import { computeAvailabilityBps, computeSlaCredit } from '@ssm/contracts';
 
 const SECRETS = process.env.SSM_SECRETS_DIR ?? join(process.cwd(), 'secrets/local');
 const secret = (name: string) => readFileSync(join(SECRETS, name), 'utf8').replace(/\r?\n$/, '');
@@ -30,6 +31,7 @@ const USERS = {
   controller: '00000000-0000-4000-8000-000000000002',
   hrManager: '00000000-0000-4000-8000-000000000003',
   counsel: '00000000-0000-4000-8000-000000000004',
+  oncall: '00000000-0000-4000-8000-000000000005',
 };
 const DEMO_PASSWORD = 'serigy-desenvolvimento-2026';
 
@@ -64,6 +66,7 @@ async function seedIdentity(): Promise<void> {
       [USERS.controller, 'financeiro@serigy.local', 'Controladoria', ['financial:controller']],
       [USERS.hrManager, 'pessoas@serigy.local', 'Gestão de Pessoas', ['hr:manager']],
       [USERS.counsel, 'juridico@serigy.local', 'Jurídico', ['legal:counsel']],
+      [USERS.oncall, 'plantao@serigy.local', 'Plantão de Sustentação', ['operations:oncall']],
     ];
 
     for (const [id, email, name, roles] of people) {
@@ -150,6 +153,126 @@ async function seedHr(): Promise<void> {
       );
     }
     console.log(`  hr         ${employees.length} colaboradores, 1 departamento`);
+  });
+}
+
+async function seedOperations(): Promise<void> {
+  await withPg('ssm_operations', async (c) => {
+    const environments = [
+      { id: 'd0000000-0000-4000-8000-000000000001', code: 'amb-prod-01',
+        name: 'Produção — Prefeitura de Aracaju', kind: 'production',
+        region: 'sa-east-1', target: 9950, ref: 'SER-2026-0001',
+        tags: ['sustentação', 'setor público'] },
+      { id: 'd0000000-0000-4000-8000-000000000002', code: 'amb-hom-01',
+        name: 'Homologação — Prefeitura de Aracaju', kind: 'staging',
+        region: 'sa-east-1', target: 9500, ref: 'SER-2026-0001',
+        tags: ['sustentação'] },
+      { id: 'd0000000-0000-4000-8000-000000000003', code: 'amb-dados-01',
+        name: 'Plataforma de dados — Grupo Sergipe Varejo', kind: 'data',
+        region: 'sa-east-1', target: 9900, ref: null, tags: ['dados', 'bi'] },
+    ];
+
+    for (const e of environments) {
+      await c.query(
+        `INSERT INTO environments
+           (id, tenant_id, code, name, kind, status, region, provider, contract_ref,
+            availability_target_bps, tags, created_by, updated_by)
+         VALUES ($1,$2,$3,$4,$5,'operational',$6,'AWS',$7,$8,$9,$10,$10)
+         ON CONFLICT DO NOTHING`,
+        [e.id, TENANT, e.code, e.name, e.kind, e.region, e.ref, e.target, e.tags, USERS.oncall],
+      );
+    }
+
+    // One ticket in each of the states an operator needs to tell apart.
+    const now = new Date();
+    const tickets = [
+      { num: 4818, subject: 'Latência acima do limite em amb-dados-01', sev: 'sev2',
+        status: 'in_progress', env: environments[2]!, openedMinutesAgo: 95, responded: true },
+      { num: 4821, subject: 'Revisar regra de alerta de disco', sev: 'sev3',
+        status: 'waiting_customer', env: environments[1]!, openedMinutesAgo: 400, responded: true },
+      { num: 4822, subject: 'Certificado TLS vence em 7 dias', sev: 'sev3',
+        status: 'open', env: environments[0]!, openedMinutesAgo: 20, responded: false },
+    ];
+
+    for (const t of tickets) {
+      const openedAt = new Date(now.getTime() - t.openedMinutesAgo * 60_000);
+      const dueMinutes = t.sev === 'sev1' ? 15 : t.sev === 'sev2' ? 60 : 480;
+      await c.query(
+        `INSERT INTO tickets
+           (tenant_id, number, subject, description, severity, status, environment_id,
+            environment_code, opened_at, first_response_at, response_due_at,
+            response_breached, timeline, created_by, updated_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14)
+         ON CONFLICT DO NOTHING`,
+        [
+          TENANT, t.num, t.subject, 'Registrado pelo monitoramento.', t.sev, t.status,
+          t.env.id, t.env.code, openedAt,
+          t.responded ? new Date(openedAt.getTime() + 8 * 60_000) : null,
+          new Date(openedAt.getTime() + dueMinutes * 60_000),
+          !t.responded && t.openedMinutesAgo > dueMinutes,
+          JSON.stringify([
+            { at: openedAt.toISOString(), actorId: null, kind: 'created',
+              note: `Chamado aberto com severidade ${t.sev}.` },
+          ]),
+          USERS.oncall,
+        ],
+      );
+    }
+    /**
+     * A resolved incident in the previous month plus its reckoning, so the SLA
+     * screen has content on a fresh environment instead of an empty state.
+     *
+     * The figures come from the SAME computeAvailabilityBps and computeSlaCredit
+     * the service uses — hardcoding them here would be a second implementation
+     * of a number that ends up on an invoice, which is exactly what putting
+     * them in @ssm/contracts was meant to prevent.
+     */
+    const prod = environments[0]!;
+    const outageStart = new Date(Date.UTC(2026, 6, 14, 2, 0, 0));
+    const outageEnd = new Date(Date.UTC(2026, 6, 14, 14, 0, 0)); // 12 horas
+    const downtimeMinutes = Math.round((outageEnd.getTime() - outageStart.getTime()) / 60_000);
+
+    await c.query(
+      `INSERT INTO tickets
+         (tenant_id, number, subject, description, severity, status, environment_id,
+          environment_code, opened_at, first_response_at, resolved_at, closed_at,
+          response_due_at, response_breached, timeline, created_by, updated_by)
+       VALUES ($1,4790,$2,$3,'sev1','closed',$4,$5,$6,$7,$8,$8,$9,false,'[]',$10,$10)
+       ON CONFLICT DO NOTHING`,
+      [
+        TENANT,
+        'Indisponibilidade prolongada do cluster',
+        'Perda de quórum no cluster de banco. Restabelecido após reconstrução do nó.',
+        prod.id, prod.code, outageStart,
+        new Date(outageStart.getTime() + 11 * 60_000),
+        outageEnd,
+        new Date(outageStart.getTime() + 15 * 60_000),
+        USERS.oncall,
+      ],
+    );
+
+    const julyMinutes = 31 * 24 * 60;
+    const achievedBps = computeAvailabilityBps(julyMinutes, downtimeMinutes);
+    const monthlyFeeMinor = 1_500_000; // R$ 15.000,00 — a mensalidade do contrato
+    const creditMinor = computeSlaCredit(achievedBps, prod.target, monthlyFeeMinor);
+
+    await c.query(
+      `INSERT INTO sla_periods
+         (tenant_id, environment_id, environment_code, month, measured_minutes,
+          downtime_minutes, achieved_bps, target_bps, breached, credit_minor, credit_currency)
+       VALUES ($1,$2,$3,'2026-07-01',$4,$5,$6,$7,$8,$9,$10)
+       ON CONFLICT DO NOTHING`,
+      [
+        TENANT, prod.id, prod.code, julyMinutes, downtimeMinutes,
+        achievedBps, prod.target, creditMinor > 0,
+        creditMinor > 0 ? creditMinor : null, creditMinor > 0 ? 'BRL' : null,
+      ],
+    );
+
+    console.log(
+      `  operations ${environments.length} ambientes, ${tickets.length + 1} chamados, ` +
+        `1 apuração de SLA (${(achievedBps / 100).toFixed(2)}%, crédito ${creditMinor / 100})`,
+    );
   });
 }
 
@@ -277,6 +400,7 @@ async function main(): Promise<void> {
   await seedFinancial();
   await seedHr();
   await seedLegal();
+  await seedOperations();
 
   console.log(`
 Pronto. Entre com qualquer um destes e a senha "${DEMO_PASSWORD}":
@@ -285,6 +409,7 @@ Pronto. Entre com qualquer um destes e a senha "${DEMO_PASSWORD}":
   financeiro@serigy.local   só o módulo Financeiro
   pessoas@serigy.local      só o módulo Pessoas
   juridico@serigy.local     só o módulo Jurídico
+  plantao@serigy.local      só Operações, sem aprovar SLA
 
 Entrar com um dos três últimos é a forma mais rápida de confirmar que a
 filtragem de módulos por permissão está funcionando no shell.

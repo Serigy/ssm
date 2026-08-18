@@ -43,6 +43,7 @@ web:
   mfe-financial: { replicas: 1 }
   mfe-hr: { replicas: 1 }
   mfe-legal: { replicas: 1 }
+  mfe-operations: { replicas: 1 }
 
 ingress:
   enabled: true
@@ -74,11 +75,14 @@ postgresql:
           CREATE DATABASE ssm_identity;
           CREATE DATABASE ssm_financial;
           CREATE DATABASE ssm_hr;
+          CREATE DATABASE ssm_operations;
           \connect ssm_identity
           CREATE EXTENSION IF NOT EXISTS pgcrypto;
           \connect ssm_financial
           CREATE EXTENSION IF NOT EXISTS pgcrypto;
           \connect ssm_hr
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          \connect ssm_operations
           CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 mongodb:

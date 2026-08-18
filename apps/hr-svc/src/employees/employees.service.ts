@@ -255,10 +255,12 @@ export class EmployeesService {
     }
   }
 
+  /** Serialised per tenant — see the note in financial-svc's nextNumber. */
   private async nextNumber(tx: EntityManager, tenantId: string): Promise<string> {
+    await tx.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`employees:${tenantId}`]);
     const [row] = (await tx.query(
       `SELECT employee_number FROM employees
-        WHERE tenant_id = $1 ORDER BY employee_number DESC LIMIT 1 FOR UPDATE`,
+        WHERE tenant_id = $1 ORDER BY employee_number DESC LIMIT 1`,
       [tenantId],
     )) as Array<{ employee_number: string }>;
     const last = row ? Number(row.employee_number.replace(/\D/g, '')) : 0;

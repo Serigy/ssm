@@ -659,6 +659,143 @@ importers:
         specifier: ^6.3.3
         version: 6.4.3(@types/node@22.20.1)(terser@5.50.0)(tsx@4.23.12)(yaml@2.9.0)
 
+  apps/mfe-operations:
+    dependencies:
+      '@ssm/contracts':
+        specifier: workspace:*
+        version: link:../../libs/contracts
+      '@ssm/mfe-runtime':
+        specifier: workspace:*
+        version: link:../../libs/mfe-runtime
+      '@ssm/ui-kit':
+        specifier: workspace:*
+        version: link:../../libs/ui-kit
+      react:
+        specifier: ^19.1.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.8(react@19.2.8)
+      react-router-dom:
+        specifier: ^7.5.2
+        version: 7.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+    devDependencies:
+      '@module-federation/vite':
+        specifier: ^1.4.1
+        version: 1.20.7(typescript@5.9.3)(vite@6.4.3(@types/node@22.20.1)(terser@5.50.0)(tsx@4.23.12)(yaml@2.9.0))
+      '@types/react':
+        specifier: ^19.1.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.1.2
+        version: 19.2.4(@types/react@19.2.18)
+      '@vitejs/plugin-react':
+        specifier: ^4.4.1
+        version: 4.7.0(supports-color@8.1.1)(vite@6.4.3(@types/node@22.20.1)(terser@5.50.0)(tsx@4.23.12)(yaml@2.9.0))
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vite:
+        specifier: ^6.3.3
+        version: 6.4.3(@types/node@22.20.1)(terser@5.50.0)(tsx@4.23.12)(yaml@2.9.0)
+
+  apps/ops-svc:
+    dependencies:
+      '@aikidosec/firewall':
+        specifier: ^1.0.0
+        version: 1.8.36
+      '@aws-sdk/client-s3':
+        specifier: ^3.789.0
+        version: 3.1111.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: ^3.789.0
+        version: 3.1111.0
+      '@nestjs/common':
+        specifier: ^11.1.0
+        version: 11.2.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1)
+      '@nestjs/core':
+        specifier: ^11.1.0
+        version: 11.2.1(@nestjs/common@11.2.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/platform-express@11.2.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/platform-express':
+        specifier: ^11.1.0
+        version: 11.2.1(@nestjs/common@11.2.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(supports-color@8.1.1)
+      '@nestjs/swagger':
+        specifier: ^11.1.5
+        version: 11.4.6(@nestjs/common@11.2.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(reflect-metadata@0.2.2)
+      '@nestjs/terminus':
+        specifier: ^11.0.0
+        version: 11.1.1(@nestjs/axios@4.0.1(@nestjs/common@11.2.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(axios@1.19.0(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1))(rxjs@7.8.2))(@nestjs/common@11.2.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(@nestjs/mongoose@11.0.4(@nestjs/common@11.2.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(mongoose@8.24.3(supports-color@8.1.1))(rxjs@7.8.2))(@nestjs/typeorm@11.0.3(@nestjs/common@11.2.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.31(ioredis@5.11.1(supports-color@8.1.1))(mongodb@6.21.0)(pg@8.23.0)(supports-color@8.1.1)))(mongoose@8.24.3(supports-color@8.1.1))(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.31(ioredis@5.11.1(supports-color@8.1.1))(mongodb@6.21.0)(pg@8.23.0)(supports-color@8.1.1))
+      '@nestjs/throttler':
+        specifier: ^6.4.0
+        version: 6.5.0(@nestjs/common@11.2.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(reflect-metadata@0.2.2)
+      '@nestjs/typeorm':
+        specifier: ^11.0.0
+        version: 11.0.3(@nestjs/common@11.2.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.31(ioredis@5.11.1(supports-color@8.1.1))(mongodb@6.21.0)(pg@8.23.0)(supports-color@8.1.1))
+      '@ssm/contracts':
+        specifier: workspace:*
+        version: link:../../libs/contracts
+      '@ssm/nest-common':
+        specifier: workspace:*
+        version: link:../../libs/nest-common
+      amqplib:
+        specifier: ^0.10.8
+        version: 0.10.9
+      helmet:
+        specifier: ^8.1.0
+        version: 8.3.0
+      ioredis:
+        specifier: ^5.6.1
+        version: 5.11.1(supports-color@8.1.1)
+      jose:
+        specifier: ^6.0.10
+        version: 6.2.9
+      nestjs-zod:
+        specifier: ^4.3.1
+        version: 4.3.1(@nestjs/common@11.2.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(@nestjs/swagger@11.4.6(@nestjs/common@11.2.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(reflect-metadata@0.2.2))(zod@3.25.76)
+      pg:
+        specifier: ^8.15.6
+        version: 8.23.0
+      pino:
+        specifier: ^9.6.0
+        version: 9.14.0
+      pino-http:
+        specifier: ^10.4.0
+        version: 10.5.0
+      pino-pretty:
+        specifier: ^13.0.0
+        version: 13.1.3
+      reflect-metadata:
+        specifier: ^0.2.2
+        version: 0.2.2
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+      typeorm:
+        specifier: ^0.3.22
+        version: 0.3.31(ioredis@5.11.1(supports-color@8.1.1))(mongodb@6.21.0)(pg@8.23.0)(supports-color@8.1.1)
+      zod:
+        specifier: ^3.24.3
+        version: 3.25.76
+    devDependencies:
+      '@nestjs/cli':
+        specifier: ^11.0.7
+        version: 11.0.24(@types/node@22.20.1)(esbuild@0.28.2)(postcss@8.5.26)(prettier@3.9.6)
+      '@nestjs/testing':
+        specifier: ^11.1.0
+        version: 11.2.1(@nestjs/common@11.2.1(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.1)(@nestjs/platform-express@11.2.1)
+      '@types/amqplib':
+        specifier: ^0.10.7
+        version: 0.10.8
+      '@types/express':
+        specifier: ^5.0.1
+        version: 5.0.6
+      supertest:
+        specifier: ^7.1.0
+        version: 7.2.2(supports-color@8.1.1)
+
   apps/shell:
     dependencies:
       '@ssm/contracts':

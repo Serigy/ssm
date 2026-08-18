@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_REMOTE_FINANCIAL?: string;
   readonly VITE_REMOTE_HR?: string;
   readonly VITE_REMOTE_LEGAL?: string;
+  readonly VITE_REMOTE_OPERATIONS?: string;
 }
 
 interface ImportMeta {

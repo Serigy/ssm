@@ -29,6 +29,7 @@ export default defineConfig({
         financial: { type: 'module', name: 'financial', entry: remoteUrl('financial', 4201) },
         hr: { type: 'module', name: 'hr', entry: remoteUrl('hr', 4202) },
         legal: { type: 'module', name: 'legal', entry: remoteUrl('legal', 4203) },
+        operations: { type: 'module', name: 'operations', entry: remoteUrl('operations', 4204) },
       },
       /**
        * Singletons, all of them. Two copies of React in one page produce the

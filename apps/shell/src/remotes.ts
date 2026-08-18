@@ -12,7 +12,7 @@ import type { RemoteRootProps, SsmModuleDefinition } from '@ssm/mfe-runtime';
  * ever opens Financeiro never downloads a byte of Pessoas or Jurídico.
  */
 export interface RemoteDescriptor {
-  id: 'financial' | 'hr' | 'legal';
+  id: 'financial' | 'hr' | 'legal' | 'operations';
   label: string;
   basePath: string;
   /**
@@ -59,5 +59,11 @@ export const REMOTES: RemoteDescriptor[] = [
     label: 'Jurídico',
     basePath: '/juridico',
     Root: lazyRoot(() => import('legal/Module')),
+  },
+  {
+    id: 'operations',
+    label: 'Operações',
+    basePath: '/operacoes',
+    Root: lazyRoot(() => import('operations/Module')),
   },
 ];

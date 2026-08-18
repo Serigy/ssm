@@ -28,6 +28,7 @@ export IDENTITY_URL=http://localhost:3001
 export FINANCIAL_URL=http://localhost:3002
 export HR_URL=http://localhost:3003
 export LEGAL_URL=http://localhost:3004
+export OPERATIONS_URL=http://localhost:3005
 
 # svc:port:database
 SERVICES=(
@@ -35,6 +36,7 @@ SERVICES=(
   "financial-svc:3002:ssm_financial"
   "hr-svc:3003:ssm_hr"
   "legal-svc:3004:ssm_legal"
+  "ops-svc:3005:ssm_operations"
   "gateway:3000:-"
 )
 

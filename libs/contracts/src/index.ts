@@ -4,3 +4,4 @@ export * from './identity/index.js';
 export * from './financial/index.js';
 export * from './hr/index.js';
 export * from './legal/index.js';
+export * from './operations/index.js';

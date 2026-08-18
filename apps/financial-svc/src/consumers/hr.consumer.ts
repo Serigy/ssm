@@ -39,6 +39,30 @@ export class HrConsumer implements OnModuleInit {
       // TODO(financial): criar cronograma de faturamento a partir do contrato.
     });
 
+    /**
+     * The SLA credit. This is the event that closes the loop across the whole
+     * system: legal wrote the availability commitment, operations measured the
+     * month against it, and financial owes the customer money for the gap.
+     *
+     * The amount arrives already computed, by the shared computeSlaCredit in
+     * @ssm/contracts — recomputing it here would be a second implementation of
+     * a figure that appears on an invoice, which is the disagreement this
+     * architecture goes out of its way to avoid.
+     */
+    this.bus.on('operations.sla.breached', async (raw, envelope) => {
+      const p = parseEventPayload('operations.sla.breached', raw);
+      this.log.warn(
+        `SLA descumprido em ${p.environmentCode} no mês ${p.month}: ` +
+          `${(p.achievedBps / 100).toFixed(2)}% contra meta de ${(p.targetBps / 100).toFixed(2)}% ` +
+          `(${p.downtimeMinutes} min indisponível). Crédito de ` +
+          `${p.credit.amountMinor} ${p.credit.currency} a lançar` +
+          `${p.contractRef ? ` no contrato ${p.contractRef}` : ''} (evento ${envelope.id}).`,
+      );
+      // TODO(financial): emitir nota de crédito e abatê-la da próxima fatura da
+      // contraparte. Depende das notas de crédito, ainda pendentes — ver
+      // docs/modules/financeiro.md.
+    });
+
     await this.bus.startConsumer([...(SERVICE_BINDINGS['financial-svc'] ?? [])]);
   }
 }

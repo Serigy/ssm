@@ -245,6 +245,23 @@ services:
     secrets: *all-secrets
     ports: ['3004:3004']
 
+  ops-svc:
+    <<: *service-base
+    build:
+      context: .
+      dockerfile: docker/service.Dockerfile
+      args: { APP: ops-svc }
+    environment:
+      <<: *service-env
+      PORT: 3005
+      POSTGRES_DB: ssm_operations
+    secrets:
+      - postgres_password
+      - rabbitmq_password
+      - redis_password
+      - jwt_public_key.pem
+    ports: ['3005:3005']
+
   gateway:
     <<: *service-base
     build:
@@ -258,6 +275,7 @@ services:
       FINANCIAL_URL: http://financial-svc:3002
       HR_URL: http://hr-svc:3003
       LEGAL_URL: http://legal-svc:3004
+      OPERATIONS_URL: http://ops-svc:3005
     secrets:
       - rabbitmq_password
       - redis_password

@@ -1,0 +1,59 @@
+{
+  "name": "mfe-operations",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/mfe-operations/src",
+  "projectType": "application",
+  "tags": [
+    "scope:frontend",
+    "type:remote",
+    "module:operations"
+  ],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite build",
+        "cwd": "apps/mfe-operations"
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite --port 4204 --strictPort",
+        "cwd": "apps/mfe-operations"
+      }
+    },
+    "preview": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite preview --port 4204 --strictPort",
+        "cwd": "apps/mfe-operations"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p apps/mfe-operations/tsconfig.json --noEmit"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint apps/mfe-operations/src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --root apps/mfe-operations --passWithNoTests"
+      }
+    },
+    "container": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -f docker/web.Dockerfile --build-arg APP=mfe-operations -t ssm/mfe-operations:dev .",
+        "cwd": "."
+      }
+    }
+  }
+}

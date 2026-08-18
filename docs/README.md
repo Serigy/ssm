@@ -26,10 +26,12 @@ apps/
   financial-svc/    faturamento          (Postgres)
   hr-svc/           colaboradores        (Postgres)
   legal-svc/        contratos            (MongoDB)
+  ops-svc/          sustentação e SLA    (Postgres)
   shell/            host dos micro-frontends
   mfe-financial/    remote federado
   mfe-hr/           remote federado
   mfe-legal/        remote federado
+  mfe-operations/   remote federado
 
 libs/
   contracts/        tipos e eventos compartilhados — fonte da verdade

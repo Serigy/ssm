@@ -73,6 +73,12 @@ services:
     secretKeys:
       [postgres_password, rabbitmq_password, redis_password, jwt_public_key.pem,
        pii_encryption_key, r2_account_id, r2_access_key_id, r2_secret_access_key]
+  ops-svc:
+    port: 3005
+    database: ssm_operations
+    secretKeys:
+      [postgres_password, rabbitmq_password, redis_password, jwt_public_key.pem]
+
   legal-svc:
     port: 3004
     engine: mongodb
@@ -95,6 +101,9 @@ web:
     replicas: 2
   mfe-legal:
     path: /juridico
+    replicas: 2
+  mfe-operations:
+    path: /operacoes
     replicas: 2
 
 ingress:

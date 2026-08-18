@@ -30,6 +30,19 @@ export const PERMISSIONS = [
   'legal:contract:update',
   'legal:contract:delete',
   'legal:contract:approve',
+  // operations
+  'operations:environment:read',
+  'operations:environment:create',
+  'operations:environment:update',
+  'operations:environment:delete',
+  'operations:ticket:read',
+  'operations:ticket:create',
+  'operations:ticket:update',
+  'operations:ticket:delete',
+  'operations:sla:read',
+  // Reckoning a month produces a credit on a customer's invoice. That is an
+  // approval, not an update.
+  'operations:sla:approve',
   // platform
   'platform:user:read',
   'platform:user:manage',
@@ -49,7 +62,27 @@ export const ROLES = {
   'hr:viewer': ['hr:employee:read'],
   'legal:counsel': PERMISSIONS.filter((p) => p.startsWith('legal:')),
   'legal:viewer': ['legal:contract:read'],
-  auditor: ['platform:audit:read', 'financial:invoice:read', 'legal:contract:read'],
+  'operations:lead': PERMISSIONS.filter((p) => p.startsWith('operations:')),
+  /**
+   * The on-call engineer: opens, works and resolves tickets, sees the
+   * inventory — but does not provision environments, does not renegotiate an
+   * availability target, and does not sign off a month that becomes a credit.
+   * Those are decisions with contractual and financial weight, taken awake.
+   */
+  'operations:oncall': [
+    'operations:environment:read',
+    'operations:ticket:read',
+    'operations:ticket:create',
+    'operations:ticket:update',
+    'operations:sla:read',
+  ],
+  'operations:viewer': ['operations:environment:read', 'operations:ticket:read'],
+  auditor: [
+    'platform:audit:read',
+    'financial:invoice:read',
+    'legal:contract:read',
+    'operations:sla:read',
+  ],
 } as const satisfies Record<string, readonly string[]>;
 
 export type RoleName = keyof typeof ROLES;

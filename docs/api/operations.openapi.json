@@ -1,0 +1,538 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/operations/v1/environments": {
+      "get": {
+        "description": "Ambientes em incidente vêm primeiro — é para isso que esta tela existe.",
+        "operationId": "Environments_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentPageDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Inventário de ambientes",
+        "tags": [
+          "environments"
+        ]
+      },
+      "post": {
+        "operationId": "Environments_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEnvironmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Código já usado por outro ambiente."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Provisiona um ambiente sob sustentação",
+        "tags": [
+          "environments"
+        ]
+      }
+    },
+    "/api/operations/v1/environments/{id}": {
+      "get": {
+        "operationId": "Environments_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Obtém um ambiente",
+        "tags": [
+          "environments"
+        ]
+      },
+      "put": {
+        "operationId": "Environments_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEnvironmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Altera um ambiente",
+        "tags": [
+          "environments"
+        ]
+      }
+    },
+    "/api/operations/v1/environments/{id}/window": {
+      "post": {
+        "description": "Indisponibilidade dentro da janela sai da apuração de disponibilidade. É por isso que ela é declarada antes e não discutida depois — e por isso um ambiente em incidente não aceita agendamento.",
+        "operationId": "Environments_scheduleWindow",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleWindowDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "409": {
+            "description": "Ambiente em incidente, ou janela invertida."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Agenda uma janela de manutenção",
+        "tags": [
+          "environments"
+        ]
+      }
+    },
+    "/api/operations/v1/tickets": {
+      "get": {
+        "description": "Ordenado por severidade e depois por abertura: um sev1 em aberto vai para o topo independentemente de quando chegou, que é como o plantão lê esta tela.",
+        "operationId": "Tickets_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketPageDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lista chamados",
+        "tags": [
+          "tickets"
+        ]
+      },
+      "post": {
+        "description": "O prazo de primeira resposta é calculado na abertura, a partir da severidade e do alvo do ambiente. Um sev1 coloca o ambiente em incidente.",
+        "operationId": "Tickets_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTicketDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Abre um chamado",
+        "tags": [
+          "tickets"
+        ]
+      }
+    },
+    "/api/operations/v1/tickets/{id}": {
+      "get": {
+        "operationId": "Tickets_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Obtém um chamado com a linha do tempo",
+        "tags": [
+          "tickets"
+        ]
+      }
+    },
+    "/api/operations/v1/tickets/{id}/status": {
+      "post": {
+        "description": "A primeira saída de \"open\" é registrada como a primeira resposta, e é contra ela que o prazo do contrato é apurado.",
+        "operationId": "Tickets_transition",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitionTicketDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Altera o estado do chamado",
+        "tags": [
+          "tickets"
+        ]
+      }
+    },
+    "/api/operations/v1/tickets/{id}/assign": {
+      "post": {
+        "operationId": "Tickets_assign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignTicketDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atribui o chamado a um colaborador",
+        "tags": [
+          "tickets"
+        ]
+      }
+    },
+    "/api/operations/v1/sla": {
+      "get": {
+        "operationId": "Sla_list",
+        "parameters": [
+          {
+            "name": "month",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SlaPeriodDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Apurações de disponibilidade",
+        "tags": [
+          "sla"
+        ]
+      }
+    },
+    "/api/operations/v1/sla/reckon": {
+      "post": {
+        "description": "A indisponibilidade é derivada dos chamados de severidade 1, não digitada — um número informado à mão é um número do qual se pode ser convencido. Incidentes sobrepostos são fundidos, e janelas agendadas saem do denominador. A apuração é gravada uma vez: reexecutar devolve o resultado guardado, porque ela vira crédito em uma fatura que o cliente já viu.",
+        "operationId": "Sla_reckon",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReckonSlaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlaPeriodDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Apura a disponibilidade do mês para um ambiente",
+        "tags": [
+          "sla"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "SSM — Operações",
+    "description": "Sustentação: inventário de ambientes, chamados com severidade e prazo, escala de plantão e apuração mensal de SLA. O alvo de disponibilidade vem do contrato no módulo Jurídico; o crédito por descumprimento é publicado para o Financeiro aplicar.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Serigy Platform",
+      "url": "https://ssm.serigy.io",
+      "email": "platform@serigy.io"
+    }
+  },
+  "tags": [
+    {
+      "name": "environments",
+      "description": "Inventário de ambientes sob sustentação"
+    },
+    {
+      "name": "tickets",
+      "description": "Chamados, severidade e prazo de resposta"
+    },
+    {
+      "name": "sla",
+      "description": "Apuração mensal de disponibilidade"
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local gateway"
+    },
+    {
+      "url": "https://ssm.local",
+      "description": "kind cluster"
+    },
+    {
+      "url": "https://api.ssm.serigy.io",
+      "description": "Production"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "in": "header"
+      }
+    },
+    "schemas": {
+      "EnvironmentPageDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "EnvironmentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateEnvironmentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateEnvironmentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ScheduleWindowDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "TicketPageDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "TicketDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateTicketDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "TransitionTicketDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AssignTicketDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "SlaPeriodDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ReckonSlaDto": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  }
+}
