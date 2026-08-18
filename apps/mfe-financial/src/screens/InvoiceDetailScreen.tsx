@@ -16,7 +16,7 @@ import {
   formatQuantity,
   type Column,
 } from '@ssm/ui-kit';
-import { useHost, useQuery } from '@ssm/mfe-runtime';
+import { isAggregateId, useHost, useQuery } from '@ssm/mfe-runtime';
 import type { InvoiceLine } from '@ssm/contracts';
 import { financialApi } from '../api.js';
 import { STATUS_LABEL, STATUS_TONE } from '../status.js';
@@ -30,9 +30,12 @@ export function InvoiceDetailScreen() {
   const [voidReason, setVoidReason] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Guarded so a path that is not an id never becomes a request. The screen
+  // renders its own "não encontrada" instead of surfacing a 400.
+  const valid = isAggregateId(id);
   const { data: invoice, loading, error, refetch } = useQuery(
-    () => financialApi.get(api, id),
-    [id],
+    () => (valid ? financialApi.get(api, id) : Promise.reject(new Error('Identificador inválido.'))),
+    [id, valid],
   );
 
   useEffect(() => {

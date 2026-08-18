@@ -12,7 +12,7 @@ import {
   formatDate,
   formatMoney,
 } from '@ssm/ui-kit';
-import { useHost, useQuery } from '@ssm/mfe-runtime';
+import { isAggregateId, useHost, useQuery } from '@ssm/mfe-runtime';
 import type { Clause, ContractStatus } from '@ssm/contracts';
 import { legalApi } from '../api.js';
 import { KIND_LABEL, RISK_LABEL, RISK_TONE, STATUS_LABEL, STATUS_TONE, daysUntil } from '../status.js';
@@ -37,7 +37,11 @@ export function ContractDetailScreen() {
   const [tab, setTab] = useState('clauses');
   const [busy, setBusy] = useState(false);
 
-  const { data: contract, loading, error, refetch } = useQuery(() => legalApi.get(api, id), [id]);
+  const valid = isAggregateId(id);
+  const { data: contract, loading, error, refetch } = useQuery(
+    () => (valid ? legalApi.get(api, id) : Promise.reject(new Error('Identificador inválido.'))),
+    [id, valid],
+  );
 
   useEffect(() => {
     if (contract) setPageTitle(contract.reference, contract.title);

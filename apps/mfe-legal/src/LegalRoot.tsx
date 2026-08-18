@@ -3,6 +3,7 @@ import { HostProvider, type RemoteRootProps } from '@ssm/mfe-runtime';
 import { EmptyState } from '@ssm/ui-kit';
 import { ContractListScreen } from './screens/ContractListScreen.js';
 import { ContractDetailScreen } from './screens/ContractDetailScreen.js';
+import { ContractCreateScreen } from './screens/ContractCreateScreen.js';
 import { ExpiringScreen } from './screens/ExpiringScreen.js';
 
 export function LegalRoot({ services }: RemoteRootProps) {
@@ -14,6 +15,7 @@ export function LegalRoot({ services }: RemoteRootProps) {
       <Routes>
         <Route index element={<Navigate to="contratos" replace />} />
         <Route path="contratos" element={<ContractListScreen />} />
+        <Route path="contratos/novo" element={<ContractCreateScreen />} />
         <Route path="contratos/:id" element={<ContractDetailScreen />} />
         <Route path="vencimentos" element={<ExpiringScreen />} />
         <Route

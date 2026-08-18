@@ -130,6 +130,8 @@ resposta é sinalizar para revisão humana, não impedir a escrita.
 
 ## Pendente
 
+- Edição de metadados pela interface (a API já aceita `PUT`)
+- Registro de cláusulas pela interface (hoje só via `POST /:id/amend`)
 - Extração de cláusulas do PDF (hoje entram manualmente)
 - Classificação de risco assistida
 - Painel de obrigações com prazos

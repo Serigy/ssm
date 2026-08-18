@@ -1,16 +1,27 @@
-import type { CreateInvoice, Money } from '@ssm/contracts';
+import type { Money } from './primitives.js';
 
 /**
  * All invoice arithmetic, in one place, in integers.
  *
- * Every rounding decision the system makes is here and nowhere else. Scattering
- * `Math.round` through a service is how two endpoints end up disagreeing about
- * a total by one cent, which in a financial module is a reconciliation failure,
- * not a cosmetic bug.
+ * It lives in @ssm/contracts rather than inside financial-svc because two
+ * places need the same answer: the service, which computes the authoritative
+ * totals, and the invoice form, which previews them as the user types. A second
+ * implementation on the frontend would eventually round differently, and the
+ * preview would disagree with the invoice actually issued — by a cent, which in
+ * a financial module is a reconciliation failure rather than a cosmetic bug.
+ *
+ * Every rounding decision the system makes is here and nowhere else.
  *
  * Rounding rule: half-up at the line level, then sum. Lines are what appear on
  * the printed document, so they must be the values that add up.
  */
+
+/** The shape totals are computed from — a line before it has an id. */
+export interface ComputableLine {
+  quantityMilli: number;
+  unitPrice: Money;
+  taxRateBps?: number;
+}
 
 export interface ComputedLine {
   netMinor: number;
@@ -34,7 +45,7 @@ function divRoundHalfUp(numerator: bigint, denominator: bigint): bigint {
   return negative ? -q : q;
 }
 
-export function computeTotals(lines: CreateInvoice['lines']): ComputedTotals {
+export function computeTotals(lines: readonly ComputableLine[]): ComputedTotals {
   const computed: ComputedLine[] = [];
   let subtotal = 0n;
   let tax = 0n;

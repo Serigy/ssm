@@ -12,7 +12,7 @@ import {
   formatDate,
   formatMoney,
 } from '@ssm/ui-kit';
-import { useHost, useQuery } from '@ssm/mfe-runtime';
+import { isAggregateId, useHost, useQuery } from '@ssm/mfe-runtime';
 import { hrApi } from '../api.js';
 import { STATUS_LABEL, STATUS_TONE } from '../status.js';
 
@@ -33,7 +33,11 @@ export function EmployeeDetailScreen() {
   const [reason, setReason] = useState('resignation');
   const [busy, setBusy] = useState(false);
 
-  const { data: employee, loading, error, refetch } = useQuery(() => hrApi.get(api, id), [id]);
+  const valid = isAggregateId(id);
+  const { data: employee, loading, error, refetch } = useQuery(
+    () => (valid ? hrApi.get(api, id) : Promise.reject(new Error('Identificador inválido.'))),
+    [id, valid],
+  );
 
   useEffect(() => {
     if (employee) setPageTitle(`${employee.firstName} ${employee.lastName}`, employee.employeeNumber);

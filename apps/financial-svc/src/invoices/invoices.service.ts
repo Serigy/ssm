@@ -7,6 +7,9 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import {
+  computeTotals,
+  isSameCurrency,
+  money,
   type CreateInvoice,
   type Invoice,
   type InvoiceFilter,
@@ -22,7 +25,6 @@ import { DataSource, type EntityManager } from 'typeorm';
 import { OutboxEntity } from '../database/outbox.entity.js';
 import { InvoiceLineEntity } from './invoice-line.entity.js';
 import { InvoiceEntity } from './invoice.entity.js';
-import { computeTotals, isSameCurrency, money } from './money.js';
 
 /**
  * Legal transitions. Anything not listed is rejected — an invoice cannot go

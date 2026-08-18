@@ -18,14 +18,17 @@ export function Field({ label, hint, error, required, htmlFor, className, style,
   return (
     <div className={cx('ssm-field', className)} style={style}>
       {label && (
-        <label className="ssm-field__label" htmlFor={htmlFor}>
+        // The required marker is drawn by CSS (::after on .ssm-field__label--required),
+        // never as a text node. A "*" inside the label becomes part of the
+        // field's name: assistive technology reads "Contraparte asterisk", and
+        // any tooling that matches on the label — a test, an autofill heuristic —
+        // has to know about the decoration. The `required` attribute on the
+        // control already carries the meaning; this is purely visual.
+        <label
+          className={cx('ssm-field__label', required && 'ssm-field__label--required')}
+          htmlFor={htmlFor}
+        >
           {label}
-          {required && (
-            <span className="ssm-field__required" aria-hidden="true">
-              {' '}
-              *
-            </span>
-          )}
         </label>
       )}
       {children}

@@ -105,9 +105,19 @@ para que o número permaneça no histórico.
 O PDF fica no R2. A API devolve uma URL assinada de curta duração; o arquivo
 nunca passa pelo serviço.
 
+## Aritmética compartilhada
+
+`computeTotals` vive em `@ssm/contracts`, não no serviço, porque dois lugares
+precisam da mesma resposta: o serviço, que calcula os totais oficiais, e o
+formulário de emissão, que os mostra enquanto a pessoa digita. Uma segunda
+implementação no front acabaria arredondando diferente, e a prévia passaria a
+divergir da fatura emitida — por um centavo, que aqui é falha de conciliação.
+
 ## Pendente
 
 - Renderização do PDF (hoje `documentKey` é sempre nulo)
+- Seleção de contraparte a partir de um cadastro (hoje o nome é digitado)
+- Edição de rascunho pela interface (a API já aceita `PUT`)
 - Notas de crédito
 - Faturamento recorrente a partir de contrato
 - Relatórios e exportação contábil

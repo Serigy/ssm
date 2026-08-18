@@ -3,6 +3,7 @@ import { HostProvider, type RemoteRootProps } from '@ssm/mfe-runtime';
 import { EmptyState } from '@ssm/ui-kit';
 import { InvoiceListScreen } from './screens/InvoiceListScreen.js';
 import { InvoiceDetailScreen } from './screens/InvoiceDetailScreen.js';
+import { InvoiceCreateScreen } from './screens/InvoiceCreateScreen.js';
 
 /**
  * Routes are declared relative to the module's base path — the shell mounts
@@ -17,6 +18,10 @@ export function FinancialRoot({ services }: RemoteRootProps) {
       <Routes>
         <Route index element={<Navigate to="faturas" replace />} />
         <Route path="faturas" element={<InvoiceListScreen />} />
+        {/* Static segment before the dynamic one. React Router ranks by
+            specificity so the order is not load-bearing, but reading it in
+            this order is how you notice that "nova" must never reach :id. */}
+        <Route path="faturas/nova" element={<InvoiceCreateScreen />} />
         <Route path="faturas/:id" element={<InvoiceDetailScreen />} />
         <Route
           path="relatorios"

@@ -3,6 +3,7 @@ import { HostProvider, type RemoteRootProps } from '@ssm/mfe-runtime';
 import { EmptyState } from '@ssm/ui-kit';
 import { EmployeeListScreen } from './screens/EmployeeListScreen.js';
 import { EmployeeDetailScreen } from './screens/EmployeeDetailScreen.js';
+import { EmployeeCreateScreen } from './screens/EmployeeCreateScreen.js';
 
 export function HrRoot({ services }: RemoteRootProps) {
   return (
@@ -13,6 +14,7 @@ export function HrRoot({ services }: RemoteRootProps) {
       <Routes>
         <Route index element={<Navigate to="colaboradores" replace />} />
         <Route path="colaboradores" element={<EmployeeListScreen />} />
+        <Route path="colaboradores/novo" element={<EmployeeCreateScreen />} />
         <Route path="colaboradores/:id" element={<EmployeeDetailScreen />} />
         <Route
           path="folha"

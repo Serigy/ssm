@@ -104,7 +104,9 @@ por serviços sem permissão para os campos sensíveis, e fica retido no broker.
 
 ## Pendente
 
+- Edição de cadastro pela interface (a API já aceita `PUT`)
 - Estrutura organizacional na interface (a entidade existe, a tela não)
+- Captura de CPF e endereço no cadastro (as colunas existem, cifradas)
 - Anexos de documentos do colaborador
 - Job de anonimização ao fim do prazo de retenção
 - Vínculo automático com `identity-svc` na admissão

@@ -9,6 +9,7 @@ export * from './components/Tag.js';
 export * from './components/Field.js';
 export * from './components/Input.js';
 export * from './components/Select.js';
+export * from './components/Textarea.js';
 export * from './components/Checkbox.js';
 export * from './components/Radio.js';
 export * from './components/Switch.js';
