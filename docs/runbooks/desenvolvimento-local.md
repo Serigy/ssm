@@ -82,6 +82,22 @@ make affected    # só o que você mexeu — bem mais rápido
 make openapi     # se você mudou um endpoint; faça commit do diff
 ```
 
+## Sentry
+
+Workers e front-ends reportam ao Sentry em `hmg` e `prd` (ver o ADR
+[0013](../adr/0013-sentry.md)). Em desenvolvimento o SDK fica inerte, porque não
+há DSN. Para ensaiar localmente, passe o DSN do projeto:
+
+```bash
+VITE_SENTRY_DSN=<dsn de ssm-web> make web-docker
+pnpm --filter @ssm/worker-gateway exec wrangler dev --var SENTRY_DSN:<dsn de ssm-workers>
+```
+
+O `traceId` de um erro 500 é uma tag do evento: busque por `traceId:<id>`.
+
+Nos dois projetos do Sentry, ligue **Security & Privacy → Prevent Storing of IP
+Addresses**. O painel é o único lugar onde esse ajuste existe.
+
 ## Quando algo não sobe
 
 **Um serviço reinicia em laço.** `make logs S=financial-svc`. As causas mais

@@ -18,6 +18,8 @@ import {
   downloadTicket,
   uploadTicket,
   type AppEnv,
+  captureUnexpected,
+  withMonitoring,
 } from '@ssm/worker-common';
 import { z } from 'zod';
 import {
@@ -181,7 +183,7 @@ function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.infer<S> {
   return result.data;
 }
 
-export default {
+export default withMonitoring({
   fetch: app.fetch,
 
   async scheduled(_c: ScheduledController, env: AppEnv['Bindings'], ctx: ExecutionContext) {
@@ -212,11 +214,12 @@ export default {
         );
         // Devolve para a fila; depois de max_retries vai para a DLQ em vez de
         // sumir.
+        captureUnexpected(err, message.body?.correlationId ?? message.id);
         message.retry();
       }
     }
   },
-} satisfies ExportedHandler<AppEnv['Bindings'], QueueEvent>;
+} satisfies ExportedHandler<AppEnv['Bindings'], QueueEvent>);
 
 interface QueueEvent {
   id: string;

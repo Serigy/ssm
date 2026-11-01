@@ -5,6 +5,7 @@ import {
   HttpProblem,
   Coordinator,
   type AppEnv,
+  withMonitoring,
 } from '@ssm/worker-common';
 import type { Context } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
@@ -142,7 +143,7 @@ function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.infer<S> {
   return result.data;
 }
 
-export default {
+export default withMonitoring({
   fetch: app.fetch,
 
   /**
@@ -168,6 +169,6 @@ export default {
         }),
     );
   },
-} satisfies ExportedHandler<AppEnv['Bindings']>;
+} satisfies ExportedHandler<AppEnv['Bindings']>);
 
 export { Coordinator };

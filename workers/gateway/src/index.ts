@@ -1,5 +1,5 @@
 import { SSM_MODULES } from '@ssm/contracts';
-import { createApp, Coordinator, type AppEnv } from '@ssm/worker-common';
+import { createApp, Coordinator, withMonitoring, type AppEnv } from '@ssm/worker-common';
 
 /**
  * O que sobrou do gateway.
@@ -119,6 +119,6 @@ app.get('/api/v1/status', async (c) => {
   });
 });
 
-export default { fetch: app.fetch } satisfies ExportedHandler<AppEnv['Bindings']>;
+export default withMonitoring({ fetch: app.fetch } satisfies ExportedHandler<AppEnv['Bindings']>);
 
 export { Coordinator };

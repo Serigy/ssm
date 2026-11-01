@@ -7,3 +7,4 @@ export * from './sequence.js';
 export * from './r2-tickets.js';
 export * from './app.js';
 export * from './idempotency.js';
+export * from './monitoring.js';

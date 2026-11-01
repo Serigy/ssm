@@ -18,6 +18,7 @@ import {
   HttpProblem,
   Coordinator,
   type AppEnv,
+  withMonitoring,
 } from '@ssm/worker-common';
 import { z } from 'zod';
 import {
@@ -224,14 +225,14 @@ function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.infer<S> {
   return result.data;
 }
 
-export default {
+export default withMonitoring({
   fetch: app.fetch,
 
   async scheduled(_c: ScheduledController, env: AppEnv['Bindings'], ctx: ExecutionContext) {
     ctx.waitUntil(drainOutbox(env));
     ctx.waitUntil(markBreachedResponses(env));
   },
-} satisfies ExportedHandler<AppEnv['Bindings']>;
+} satisfies ExportedHandler<AppEnv['Bindings']>);
 
 /**
  * Marca descumprimento de prazo de resposta sem esperar alguém responder.

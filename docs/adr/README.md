@@ -21,6 +21,7 @@ vai lembrar se a opção óbvia foi considerada.
 | [0010](0010-cache-e-busca.md) | Redis como coordenação; sem Elasticsearch e sem IndexedDB | Aceita |
 | [0011](0011-passport-na-fronteira-de-login.md) | Passport na fronteira de login, não no acesso a recurso | **Proposta** |
 | [0012](0012-perimetro-sem-rede.md) | Perímetro sem rede: o que substitui VCN, subnet e NSG | Aceita |
+| [0013](0013-sentry.md) | Sentry para erros e desempenho | Aceita |
 
 ## Formato
 

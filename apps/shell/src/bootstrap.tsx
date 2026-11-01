@@ -1,3 +1,5 @@
+import './instrument.js';
+import { reactErrorHandler } from '@sentry/react';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
@@ -8,7 +10,11 @@ import { App } from './App.js';
 const container = document.getElementById('root');
 if (!container) throw new Error('#root ausente no index.html');
 
-createRoot(container).render(
+createRoot(container, {
+  onUncaughtError: reactErrorHandler(),
+  onCaughtError: reactErrorHandler(),
+  onRecoverableError: reactErrorHandler(),
+}).render(
   <StrictMode>
     {/*
       One BrowserRouter for the whole application, declared here in the host.

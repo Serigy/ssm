@@ -65,6 +65,10 @@ export interface BaseBindings {
   ACCESS_TOKEN_TTL_SECONDS: string;
   REFRESH_TOKEN_TTL_SECONDS: string;
   CORS_ORIGINS: string;
+  /** Ausente em dev: o SDK fica inerte. Só escreve eventos, não é credencial de leitura. */
+  SENTRY_DSN?: string;
+  /** Id da versão implantada; o SDK o usa como `release`. */
+  CF_VERSION_METADATA?: { id: string; tag?: string; timestamp?: string };
 
   // --- secrets, set with `wrangler secret put` -----------------------------
   /** PEM, RS256. Only the identity Worker gets the private half. */

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@sentry/react": "11.10.0",
     "@ssm/contracts": "workspace:*",
     "@ssm/mfe-runtime": "workspace:*",
     "@ssm/ui-kit": "workspace:*",

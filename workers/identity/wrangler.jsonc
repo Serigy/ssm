@@ -22,6 +22,7 @@
     "port": 8801,
     "local_protocol": "http"
   },
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "vars": {
     "ENVIRONMENT": "dev",
     "SERVICE_NAME": "identity-worker",
@@ -94,8 +95,10 @@
   "env": {
     "hmg": {
       "name": "ssm-identity-hmg",
+      "version_metadata": { "binding": "CF_VERSION_METADATA" },
       "vars": {
         "ENVIRONMENT": "hmg",
+        "SENTRY_DSN": "https://c57ffbaf3bbdbe0bfadc227e4cf4dfaf@o4504600654118912.ingest.us.sentry.io/4512357145378816",
         "SERVICE_NAME": "identity-worker",
         "JWT_ISSUER": "https://hmg-ssm.serigy.net",
         "JWT_AUDIENCE": "ssm",
@@ -165,8 +168,10 @@
     },
     "prd": {
       "name": "ssm-identity",
+      "version_metadata": { "binding": "CF_VERSION_METADATA" },
       "vars": {
         "ENVIRONMENT": "prd",
+        "SENTRY_DSN": "https://c57ffbaf3bbdbe0bfadc227e4cf4dfaf@o4504600654118912.ingest.us.sentry.io/4512357145378816",
         "SERVICE_NAME": "identity-worker",
         "JWT_ISSUER": "https://ssm.serigy.net",
         "JWT_AUDIENCE": "ssm",
