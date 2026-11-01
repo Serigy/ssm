@@ -384,5 +384,11 @@ if (remote && envName === 'prd') {
   process.exit(1);
 }
 
+// A senha de demonstração é pública, no README. Num banco remoto ela vira acesso.
+if (remote && target === 'identity') {
+  console.error('A identidade não se semeia em ambiente remoto: a senha é pública. Recusado.');
+  process.exit(1);
+}
+
 execFileSync('npx', args, { cwd: join(root, `workers/${target}`), stdio: 'inherit' });
 console.log(`${target} semeado em ${database}.`);
