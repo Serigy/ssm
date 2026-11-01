@@ -14,6 +14,8 @@ import {
   Coordinator,
   type AppEnv,
   withMonitoring,
+  openFromBinding,
+  type Database,
 } from '@ssm/worker-common';
 import { z } from 'zod';
 import {
@@ -25,7 +27,8 @@ import {
 } from './commands.js';
 import { findEmployeeRow, listEmployees, toFullDto, toSafeDto } from './queries.js';
 
-const app = createApp('/api/hr');
+// RH já está no Neon (ADR 0014): `postgres` abre a conexão da requisição.
+const app = createApp('/api/hr', { postgres: true });
 const BASE = '/api/hr/v1/employees';
 
 /**
@@ -44,7 +47,7 @@ app.get(BASE, requireAuth(), requirePermissions('hr:employee:read'), async (c) =
     employeeFilterSchema.merge(pageQuerySchema),
     Object.fromEntries(new URL(c.req.url).searchParams),
   );
-  const { rows, nextCursor } = await listEmployees(c.env.DB, c.get('actor').tenantId, filter, {
+  const { rows, nextCursor } = await listEmployees(c.get('db'), c.get('actor').tenantId, filter, {
     limit,
     cursor,
     sort,
@@ -59,7 +62,7 @@ app.get(BASE, requireAuth(), requirePermissions('hr:employee:read'), async (c) =
 });
 
 app.get(`${BASE}/:id`, requireAuth(), requirePermissions('hr:employee:read'), async (c) => {
-  const row = await findEmployeeRow(c.env.DB, c.get('actor').tenantId, c.req.param('id'));
+  const row = await findEmployeeRow(c.get('db'), c.get('actor').tenantId, c.req.param('id'));
   // Mesmo 404 para "não existe" e "é de outro cliente".
   if (!row) throw HttpProblem.notFound(`Colaborador ${c.req.param('id')} não encontrado.`);
   return c.json(canSeePii(c) ? await toFullDto(c.env, row) : toSafeDto(row));
@@ -74,7 +77,7 @@ app.post(BASE, requireAuth(), requirePermissions('hr:employee:create'), async (c
     // erro de digitação em documento sobrevive por anos.
     throw HttpProblem.forbidden('Gravar CPF exige hr:payroll:read.');
   }
-  const employee = await createEmployee(c.env, actor.tenantId, actor.id, dto);
+  const employee = await createEmployee(c.env, c.get('db'), actor.tenantId, actor.id, dto);
   c.header('Location', `${BASE}/${employee.id}`);
   return c.json(employee, 201);
 });
@@ -85,7 +88,7 @@ app.patch(`${BASE}/:id`, requireAuth(), requirePermissions('hr:employee:update')
   if (dto.nationalId && !actor.permissions.has('hr:payroll:read')) {
     throw HttpProblem.forbidden('Gravar CPF exige hr:payroll:read.');
   }
-  return c.json(await updateEmployee(c.env, actor.tenantId, actor.id, c.req.param('id'), dto));
+  return c.json(await updateEmployee(c.env, c.get('db'), actor.tenantId, actor.id, c.req.param('id'), dto));
 });
 
 app.post(
@@ -96,7 +99,7 @@ app.post(
   async (c) => {
     const actor = c.get('actor');
     return c.json(
-      await activateEmployee(c.env, actor.tenantId, actor.id, c.req.param('id'), c.get('traceId')),
+      await activateEmployee(c.env, c.get('db'), actor.tenantId, actor.id, c.req.param('id'), c.get('traceId')),
     );
   },
 );
@@ -112,6 +115,7 @@ app.post(
     return c.json(
       await offboardEmployee(
         c.env,
+        c.get('db'),
         actor.tenantId,
         actor.id,
         c.req.param('id'),
@@ -135,26 +139,33 @@ function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.infer<S> {
 export default withMonitoring({
   fetch: app.fetch,
   async scheduled(_c: ScheduledController, env: AppEnv['Bindings'], ctx: ExecutionContext) {
-    ctx.waitUntil(drainOutbox(env));
-    // Quem chegou ao último dia deixa de contar como quadro ativo. É barato o
-    // suficiente para rodar junto com o relay em vez de merecer outro gatilho.
+    // Não passa pelo Hono, então abre e fecha a própria conexão — uma para as
+    // duas tarefas, fechada quando ambas terminam.
+    const db = openFromBinding(env.HYPERDRIVE);
     ctx.waitUntil(
-      terminateOverdue(env).then((n) => {
-        if (n) console.log(JSON.stringify({ event: 'hr.employee.terminated_overdue', count: n }));
-      }),
+      Promise.all([
+        drainOutbox(env, db),
+        // Quem chegou ao último dia deixa de contar como quadro ativo. É barato
+        // o suficiente para rodar junto com o relay em vez de merecer outro
+        // gatilho.
+        terminateOverdue(db).then((n) => {
+          if (n) console.log(JSON.stringify({ event: 'hr.employee.terminated_overdue', count: n }));
+        }),
+      ]).finally(() => db.close()),
     );
   },
 } satisfies ExportedHandler<AppEnv['Bindings']>);
 
-async function drainOutbox(env: AppEnv['Bindings']): Promise<void> {
-  const { results } = await env.DB.prepare(
+export async function drainOutbox(env: AppEnv['Bindings'], db: Database): Promise<void> {
+  const { results } = await db.prepare(
     `SELECT id, type, payload, tenant_id, actor_id, correlation_id
        FROM outbox WHERE published_at IS NULL AND attempts < 5
       ORDER BY created_at LIMIT 50`,
   ).all<{
     id: string;
     type: string;
-    payload: string;
+    /** jsonb: o driver já devolve o objeto. */
+    payload: unknown;
     tenant_id: string;
     actor_id: string | null;
     correlation_id: string;
@@ -164,7 +175,7 @@ async function drainOutbox(env: AppEnv['Bindings']): Promise<void> {
     const envelope = {
       id: row.id,
       type: row.type,
-      data: JSON.parse(row.payload),
+      data: row.payload,
       tenantId: row.tenant_id,
       actorId: row.actor_id,
       correlationId: row.correlation_id,
@@ -176,13 +187,9 @@ async function drainOutbox(env: AppEnv['Bindings']): Promise<void> {
       // O leque é decidido aqui: as filas do Cloudflare são ponto a ponto e não
       // têm exchange de tópico. O desligamento interessa a dois módulos.
       await Promise.all([env.QUEUE_FINANCIAL.send(envelope), env.QUEUE_LEGAL.send(envelope)]);
-      await env.DB.prepare(
-        `UPDATE outbox SET published_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
-      )
-        .bind(row.id)
-        .run();
+      await db.prepare('UPDATE outbox SET published_at = now() WHERE id = ?').bind(row.id).run();
     } catch (err) {
-      await env.DB.prepare('UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?')
+      await db.prepare('UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?')
         .bind(String(err).slice(0, 500), row.id)
         .run();
     }

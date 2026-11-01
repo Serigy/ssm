@@ -123,15 +123,16 @@ function hrSql(): string {
   ];
 
   const lines = [
-    'DELETE FROM employees;',
-    'DELETE FROM departments;',
-    `INSERT INTO departments (id, tenant_id, name, created_by, updated_by)
+    'DELETE FROM hr.outbox;',
+    'DELETE FROM hr.employees;',
+    'DELETE FROM hr.departments;',
+    `INSERT INTO hr.departments (id, tenant_id, name, created_by, updated_by)
      VALUES (${q(dept)}, ${q(TENANT)}, 'Tecnologia', ${q(USERS.hrManager)}, ${q(USERS.hrManager)});`,
   ];
   for (const e of employees) {
     const email = `${e.first.toLowerCase()}.${e.last.toLowerCase()}@serigy.local`;
     lines.push(
-      `INSERT INTO employees (id, tenant_id, employee_number, first_name, last_name, work_email,
+      `INSERT INTO hr.employees (id, tenant_id, employee_number, first_name, last_name, work_email,
          status, contract_type, job_title, department_id, start_date, salary_minor,
          salary_currency, created_by, updated_by)
        VALUES (${q(e.id)}, ${q(TENANT)}, ${q(e.num)}, ${q(e.first)}, ${q(e.last)}, ${q(email)},
@@ -338,6 +339,14 @@ if (target === 'identity' && (remote || envName !== 'dev')) {
   process.exit(1);
 }
 
+// Módulos já no Neon (ADR 0014). A semente só alcança o Neon de desenvolvimento,
+// com o papel do próprio módulo; hmg e prd não são alvo desta ferramenta.
+const NEON_MODULES = ['identity', 'hr'];
+if (NEON_MODULES.includes(target) && (remote || envName !== 'dev')) {
+  console.error(`${target} está no Neon; a semente só grava no banco de desenvolvimento. Recusado.`);
+  process.exit(1);
+}
+
 /**
  * Semear com o Worker no ar mata o Worker.
  *
@@ -365,7 +374,7 @@ async function noAr(porta: number): Promise<boolean> {
 
 // identity está no Neon: não há SQLite compartilhado para travar, então o Worker
 // pode ficar no ar durante a semeadura.
-if (target !== 'identity' && !remote && envName === 'dev' && (await noAr(PORTAS[target]!))) {
+if (!NEON_MODULES.includes(target) && !remote && envName === 'dev' && (await noAr(PORTAS[target]!))) {
   console.error(
     `O Worker de ${target} está no ar na porta ${PORTAS[target]}.\n` +
       `Semear agora trava o SQLite e derruba o runtime. Pare antes:\n\n` +
@@ -382,12 +391,12 @@ const file = join(outDir, `${target}.sql`);
 writeFileSync(file, build());
 console.log(`SQL gerado em ${file.replace(root + '/', '')}`);
 
-if (target === 'identity') {
+if (NEON_MODULES.includes(target)) {
   // Neon de desenvolvimento, com o papel do próprio módulo: a semente só
   // alcança o que o Worker alcança. O arquivo é o mesmo que o Hyperdrive local
   // lê (scripts/cf-devvars.sh) — a regra é segredo em arquivo. O caminho é fixo
   // de propósito: não há variável que aponte a semente para outro banco.
-  const url = readFileSync(join(root, 'secrets/local/neon_identity_url'), 'utf8').trim();
+  const url = readFileSync(join(root, `secrets/local/neon_${target}_url`), 'utf8').trim();
   const { default: pg } = await import('pg');
   const client = new pg.Client({ connectionString: url });
   try {
@@ -398,12 +407,12 @@ if (target === 'identity') {
   } catch (err) {
     await client.query('ROLLBACK').catch(() => undefined);
     // A mensagem do driver não leva a URL; ainda assim só ela é impressa.
-    console.error('Falha ao semear identity:', err instanceof Error ? err.message : 'erro desconhecido');
+    console.error(`Falha ao semear ${target}:`, err instanceof Error ? err.message : 'erro desconhecido');
     process.exit(1);
   } finally {
     await client.end().catch(() => undefined);
   }
-  console.log('identity semeado no Neon de desenvolvimento.');
+  console.log(`${target} semeado no Neon de desenvolvimento.`);
   process.exit(0);
 }
 

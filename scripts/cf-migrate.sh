@@ -9,9 +9,9 @@ ENV_NAME="${1:-dev}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-# identity já está no Neon (ADR 0014): suas migrações são as de
+# identity e hr já estão no Neon (ADR 0014): suas migrações são as de
 # workers/migrations/postgres/, aplicadas por apply.mjs, não pelo D1.
-MODULES=(financial hr legal operations)
+MODULES=(financial legal operations)
 
 # Credencial em arquivo, como no cf-provision.sh.
 if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] && [ -z "${CLOUDFLARE_API_KEY:-}" ] && [ "$ENV_NAME" != "dev" ]; then
