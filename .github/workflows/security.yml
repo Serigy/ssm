@@ -65,6 +65,7 @@ jobs:
     name: Imagens
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         app: [gateway, identity-svc, financial-svc, hr-svc, legal-svc, ops-svc]
     steps:
@@ -89,8 +90,17 @@ jobs:
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
 
+      # The artifact is what keeps the report: code scanning on a private
+      # repository needs GitHub Advanced Security, so that upload may be refused.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-${{ matrix.app }}
+          path: trivy-${{ matrix.app }}.sarif
+
       - uses: github/codeql-action/upload-sarif@v4
         if: always()
+        continue-on-error: true
         with:
           sarif_file: trivy-${{ matrix.app }}.sarif
           category: trivy-${{ matrix.app }}
