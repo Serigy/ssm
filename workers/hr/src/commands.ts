@@ -10,6 +10,7 @@ import {
   highestNumber,
   withReservedNumber,
   type BaseBindings,
+  type Database,
 } from '@ssm/worker-common';
 import { encryptPii } from './pii.js';
 import { findEmployeeRow, toFullDto } from './queries.js';
@@ -43,13 +44,15 @@ const now = () => new Date().toISOString();
 
 export async function createEmployee(
   env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   dto: CreateEmployee,
 ): Promise<Employee> {
-  const duplicate = await env.DB.prepare(
-    'SELECT employee_number FROM employees WHERE tenant_id = ? AND lower(work_email) = lower(?)',
-  )
+  const duplicate = await db
+    .prepare(
+      'SELECT employee_number FROM employees WHERE tenant_id = ? AND lower(work_email) = lower(?)',
+    )
     .bind(tenantId, dto.workEmail)
     .first<{ employee_number: string }>();
   if (duplicate) {
@@ -58,43 +61,57 @@ export async function createEmployee(
     );
   }
 
-  const seed = await highestNumber(env.DB, 'employees', 'employee_number', tenantId, PREFIX);
+  const seed = await highestNumber(db, 'employees', 'employee_number', tenantId, PREFIX);
   const id = crypto.randomUUID();
 
   return withReservedNumber(env, tenantId, 'employees', seed, async (value) => {
     const number = `${PREFIX}${String(value).padStart(5, '0')}`;
-    await env.DB.prepare(
-      `INSERT INTO employees (
+    // O CPF é cifrado AQUI, antes do bind: o Postgres só vê o texto cifrado, e
+    // o CHECK employees_national_id_cipher_ck recusa um valor que não seja.
+    const nationalIdEnc = dto.nationalId ? await encryptPii(env, dto.nationalId) : null;
+    try {
+      await db
+        .prepare(
+          `INSERT INTO employees (
          id, tenant_id, employee_number, first_name, last_name, work_email,
          personal_email, phone, date_of_birth, national_id_enc, status,
          contract_type, job_title, department_id, manager_id, start_date,
          salary_minor, salary_currency, created_by, updated_by
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'onboarding', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(
-        id,
-        tenantId,
-        number,
-        dto.firstName,
-        dto.lastName,
-        dto.workEmail,
-        dto.personalEmail ?? null,
-        dto.phone ?? null,
-        dto.dateOfBirth ?? null,
-        dto.nationalId ? await encryptPii(env, dto.nationalId) : null,
-        dto.contractType,
-        dto.jobTitle,
-        dto.departmentId ?? null,
-        dto.managerId ?? null,
-        dto.startDate,
-        dto.salary?.amountMinor ?? null,
-        dto.salary?.currency ?? null,
-        actorId,
-        actorId,
-      )
-      .run();
+        )
+        .bind(
+          id,
+          tenantId,
+          number,
+          dto.firstName,
+          dto.lastName,
+          dto.workEmail,
+          dto.personalEmail ?? null,
+          dto.phone ?? null,
+          dto.dateOfBirth ?? null,
+          nationalIdEnc,
+          dto.contractType,
+          dto.jobTitle,
+          dto.departmentId ?? null,
+          dto.managerId ?? null,
+          dto.startDate,
+          dto.salary?.amountMinor ?? null,
+          dto.salary?.currency ?? null,
+          actorId,
+          actorId,
+        )
+        .run();
+    } catch (err) {
+      // Duas admissões simultâneas com o mesmo e-mail passam pela checagem
+      // acima juntas; quem perde bate no índice único e deve receber 409, e
+      // não um 500 com a mensagem do banco.
+      if ((err as { code?: string }).code === '23505') {
+        throw HttpProblem.conflict(`Já existe um colaborador com o e-mail ${dto.workEmail}.`);
+      }
+      throw err;
+    }
 
-    const row = await findEmployeeRow(env.DB, tenantId, id);
+    const row = await findEmployeeRow(db, tenantId, id);
     if (!row) throw new Error(`Colaborador ${id} desapareceu logo após ser criado.`);
     return toFullDto(env, row);
   });
@@ -102,12 +119,13 @@ export async function createEmployee(
 
 export async function updateEmployee(
   env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   id: string,
   dto: UpdateEmployee,
 ): Promise<Employee> {
-  const row = await findEmployeeRow(env.DB, tenantId, id);
+  const row = await findEmployeeRow(db, tenantId, id);
   if (!row) throw HttpProblem.notFound(`Colaborador ${id} não encontrado.`);
   if (row.status === 'terminated') {
     throw HttpProblem.conflict(
@@ -118,14 +136,15 @@ export async function updateEmployee(
   // Cada campo ausente no corpo mantém o valor gravado. `?? row.x` e não
   // `dto.x || row.x`: string vazia e zero são valores legítimos que o `||`
   // descartaria.
-  await env.DB.prepare(
-    `UPDATE employees
+  await db
+    .prepare(
+      `UPDATE employees
         SET first_name = ?, last_name = ?, personal_email = ?, phone = ?,
             date_of_birth = ?, national_id_enc = ?, job_title = ?,
             department_id = ?, manager_id = ?, salary_minor = ?, salary_currency = ?,
             updated_by = ?, updated_at = ?
-      WHERE id = ? AND tenant_id = ?`,
-  )
+      WHERE tenant_id = ? AND id = ?`,
+    )
     .bind(
       dto.firstName ?? row.first_name,
       dto.lastName ?? row.last_name,
@@ -140,63 +159,66 @@ export async function updateEmployee(
       dto.salary?.currency ?? row.salary_currency,
       actorId,
       now(),
-      id,
       tenantId,
+      id,
     )
     .run();
 
-  return toFullDto(env, (await findEmployeeRow(env.DB, tenantId, id))!);
+  return toFullDto(env, (await findEmployeeRow(db, tenantId, id))!);
 }
 
 export async function activateEmployee(
   env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   id: string,
   correlationId: string,
 ): Promise<Employee> {
-  const row = await findEmployeeRow(env.DB, tenantId, id);
+  const row = await findEmployeeRow(db, tenantId, id);
   if (!row) throw HttpProblem.notFound(`Colaborador ${id} não encontrado.`);
   assertTransition(row.status as EmploymentStatus, 'active');
 
-  const [updated] = await env.DB.batch([
-    env.DB.prepare(
-      `UPDATE employees SET status = 'active', updated_by = ?, updated_at = ?
-        WHERE id = ? AND tenant_id = ? AND status = ?`,
-    ).bind(actorId, now(), id, tenantId, row.status),
-    outboxInsert(env, {
+  const updated = await moveWithEvent(
+    db,
+    `UPDATE employees SET status = 'active', updated_by = ?, updated_at = ?
+      WHERE tenant_id = ? AND id = ? AND status = ?`,
+    [actorId, now(), tenantId, id, row.status],
+    {
       aggregateId: id,
       type: 'hr.employee.activated',
       tenantId,
       actorId,
       correlationId,
       payload: { employeeId: id, employeeNumber: row.employee_number, startDate: row.start_date },
-    }),
-  ]);
+    },
+  );
 
-  // O estado é a própria condição do UPDATE, então `changes === 0` significa que
-  // outra pessoa mudou a situação entre a leitura e a escrita.
-  if (!updated || updated.meta.changes === 0) {
+  // O estado é a própria condição do UPDATE, então nenhuma linha movida
+  // significa que outra pessoa mudou a situação entre a leitura e a escrita —
+  // e, por isso, nenhum evento foi gravado.
+  if (!updated) {
     throw HttpProblem.conflict('A situação do colaborador mudou enquanto era ativada.');
   }
 
-  return toFullDto(env, (await findEmployeeRow(env.DB, tenantId, id))!);
+  return toFullDto(env, (await findEmployeeRow(db, tenantId, id))!);
 }
 
 export async function offboardEmployee(
   env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   id: string,
   dto: OffboardEmployee,
   correlationId: string,
 ): Promise<Employee> {
-  const row = await findEmployeeRow(env.DB, tenantId, id);
+  const row = await findEmployeeRow(db, tenantId, id);
   if (!row) throw HttpProblem.notFound(`Colaborador ${id} não encontrado.`);
 
   if (dto.lastDay < row.start_date) {
     // O CHECK do banco recusaria de qualquer forma; recusar aqui devolve 400
-    // com explicação em vez de 500 vindo do SQLite.
+    // com explicação em vez de 500 vindo do Postgres.
     throw HttpProblem.badRequest(
       `O último dia (${dto.lastDay}) não pode ser anterior à admissão (${row.start_date}).`,
     );
@@ -207,12 +229,12 @@ export async function offboardEmployee(
   const target: EmploymentStatus = dto.lastDay > today ? 'offboarding' : 'terminated';
   assertTransition(row.status as EmploymentStatus, target);
 
-  const [updated] = await env.DB.batch([
-    env.DB.prepare(
-      `UPDATE employees SET status = ?, end_date = ?, updated_by = ?, updated_at = ?
-        WHERE id = ? AND tenant_id = ? AND status = ?`,
-    ).bind(target, dto.lastDay, actorId, now(), id, tenantId, row.status),
-    outboxInsert(env, {
+  const updated = await moveWithEvent(
+    db,
+    `UPDATE employees SET status = ?, end_date = ?, updated_by = ?, updated_at = ?
+      WHERE tenant_id = ? AND id = ? AND status = ?`,
+    [target, dto.lastDay, actorId, now(), tenantId, id, row.status],
+    {
       aggregateId: id,
       type: 'hr.employee.offboarded',
       tenantId,
@@ -223,14 +245,14 @@ export async function offboardEmployee(
       // desligamento é decidido, não quando o último dia chega: os dois lados
       // precisam do aviso prévio para agir a tempo.
       payload: { employeeId: id, lastDay: dto.lastDay, reason: dto.reason, status: target },
-    }),
-  ]);
+    },
+  );
 
-  if (!updated || updated.meta.changes === 0) {
+  if (!updated) {
     throw HttpProblem.conflict('A situação do colaborador mudou enquanto era desligada.');
   }
 
-  return toFullDto(env, (await findEmployeeRow(env.DB, tenantId, id))!);
+  return toFullDto(env, (await findEmployeeRow(db, tenantId, id))!);
 }
 
 /**
@@ -239,13 +261,16 @@ export async function offboardEmployee(
  * Sem isto `offboarding` seria estado de mão única: a pessoa entraria nele e
  * nunca sairia, e relatório de quadro ativo contaria gente que já foi embora.
  */
-export async function terminateOverdue(env: BaseBindings): Promise<number> {
+export async function terminateOverdue(db: Database): Promise<number> {
   const today = new Date().toISOString().slice(0, 10);
-  const result = await env.DB.prepare(
-    `UPDATE employees
-        SET status = 'terminated', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+  // Varre todos os tenants de propósito: é a rotina diária da tabela, não uma
+  // consulta de negócio, e roda sem requisição — não há tenant a respeitar.
+  const result = await db
+    .prepare(
+      `UPDATE employees
+        SET status = 'terminated', updated_at = now()
       WHERE status = 'offboarding' AND end_date IS NOT NULL AND end_date <= ?`,
-  )
+    )
     .bind(today)
     .run();
   return result.meta.changes;
@@ -269,18 +294,37 @@ interface OutboxEvent {
   payload: Record<string, unknown>;
 }
 
-function outboxInsert(env: BaseBindings, event: OutboxEvent): D1PreparedStatement {
-  return env.DB.prepare(
-    `INSERT INTO outbox (id, aggregate_type, aggregate_id, type, payload,
-                         tenant_id, actor_id, correlation_id)
-     VALUES (?, 'employee', ?, ?, ?, ?, ?, ?)`,
-  ).bind(
-    crypto.randomUUID(),
-    event.aggregateId,
-    event.type,
-    JSON.stringify(event.payload),
-    event.tenantId,
-    event.actorId,
-    event.correlationId,
-  );
+/**
+ * Muda a situação do colaborador e grava o evento no outbox num único comando.
+ *
+ * É um UPDATE dentro de um CTE cujo RETURNING alimenta o INSERT do outbox: as
+ * duas escritas são uma instrução, logo uma transação, e o evento só existe se
+ * a linha mudou. Com duas instruções num `batch`, o INSERT do outbox não
+ * dependeria do UPDATE — quem perdesse a corrida deixaria um evento de algo que
+ * não aconteceu. Devolve `false` quando ninguém foi movido (nada gravado).
+ */
+async function moveWithEvent(
+  db: Database,
+  updateSql: string,
+  updateParams: unknown[],
+  event: OutboxEvent,
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `WITH moved AS (${updateSql} RETURNING id)
+       INSERT INTO outbox (id, aggregate_type, aggregate_id, type, payload,
+                           tenant_id, actor_id, correlation_id)
+       SELECT ?, 'employee', moved.id, ?, ?::jsonb, ?, ?, ? FROM moved`,
+    )
+    .bind(
+      ...updateParams,
+      crypto.randomUUID(),
+      event.type,
+      JSON.stringify(event.payload),
+      event.tenantId,
+      event.actorId,
+      event.correlationId,
+    )
+    .run();
+  return result.meta.changes > 0;
 }

@@ -49,15 +49,21 @@ emit identity   JWT_PUBLIC_KEY=jwt_public_key.pem JWT_PRIVATE_KEY=jwt_private_ke
 # ambiente do próprio processo (ou do .env), antes de o Worker existir: com a
 # variável só no .dev.vars, `wrangler dev` recusa subir ("you should use a local
 # Postgres connection string"). Medido, não suposto. .env é ignorado pelo git.
-if [ -s "$SECRETS/neon_identity_url" ]; then
-  umask 077
-  printf 'CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="%s"\n' \
-    "$(< "$SECRETS/neon_identity_url")" > workers/identity/.env
-  chmod 600 workers/identity/.env
-  printf '  %-12s %s\n' identity "conexão Neon (.env)"
-else
-  echo "  aviso: $SECRETS/neon_identity_url ausente; o identity não conecta no Neon" >&2
-fi
+# Um .env por Worker já no Neon, cada um com a URL do papel do próprio módulo.
+neon_env() {
+  local worker="$1"
+  local src="$SECRETS/neon_${worker}_url"
+  if [ -s "$src" ]; then
+    ( umask 077
+      printf 'CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="%s"\n' \
+        "$(< "$src")" > "workers/$worker/.env" )
+    chmod 600 "workers/$worker/.env"
+    printf '  %-12s %s\n' "$worker" "conexão Neon (.env)"
+  else
+    echo "  aviso: $src ausente; o $worker não conecta no Neon" >&2
+  fi
+}
+neon_env identity
 emit financial  JWT_PUBLIC_KEY=jwt_public_key.pem
 # O jurídico assina URL de envio e leitura do PDF do contrato, e para isso
 # precisa das credenciais S3 do R2 — o binding R2 lê e escreve, mas não assina.
@@ -68,6 +74,7 @@ emit operations JWT_PUBLIC_KEY=jwt_public_key.pem
 emit gateway    JWT_PUBLIC_KEY=jwt_public_key.pem
 # Só o Worker de pessoas recebe a chave de cifra do CPF.
 emit hr         JWT_PUBLIC_KEY=jwt_public_key.pem PII_ENCRYPTION_KEY=pii_encryption_key
+neon_env hr
 
 echo
 echo "Pronto. Nenhum destes arquivos é versionado; confira com: make secrets-check"

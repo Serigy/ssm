@@ -62,8 +62,8 @@ runtime inteiro. A ferramenta de semente confere a porta e recusa, mas a ordem
 
 ## Banco: D1 e Neon durante a transição
 
-O ADR 0014 troca o D1 pelo Neon, um módulo por vez. **identity já está no Neon**;
-financial, hr, legal, operations e o gateway seguem no D1 (`env.DB`).
+O ADR 0014 troca o D1 pelo Neon, um módulo por vez. **identity e hr já estão no Neon**;
+financial, legal, operations e o gateway seguem no D1 (`env.DB`).
 
 - `workers/shared/src/database.ts` dá ao código o mesmo subconjunto do D1
   (`prepare/bind/first/all/run` e `batch`) sobre Postgres, via Hyperdrive. O
@@ -71,7 +71,7 @@ financial, hr, legal, operations e o gateway seguem no D1 (`env.DB`).
 - Migrações Postgres: `workers/migrations/postgres/` (ver o README de lá).
 - Em dev, o `wrangler dev` conecta direto no Neon de desenvolvimento pelo
   `.env` que `scripts/cf-devvars.sh` gera (o `.dev.vars` não serve para isso).
-- hmg e prd do identity dependem de Hyperdrives que ainda não foram criados.
+- hmg e prd do identity e do hr dependem de Hyperdrives que ainda não foram criados.
 
 ## Decisões fechadas por medição
 

@@ -1,5 +1,5 @@
 import { money, type Employee, type EmployeeFilter, type EmployeeSafe, type Page, type PageQuery } from '@ssm/contracts';
-import type { BaseBindings } from '@ssm/worker-common';
+import type { BaseBindings, Database } from '@ssm/worker-common';
 import { decryptPii } from './pii.js';
 
 export interface EmployeeRow {
@@ -12,9 +12,11 @@ export interface EmployeeRow {
   work_email: string;
   personal_email: string | null;
   phone: string | null;
+  /** date: texto AAAA-MM-DD. */
   date_of_birth: string | null;
   national_id_enc: string | null;
-  address: string | null;
+  /** jsonb: o driver já devolve o objeto. */
+  address: Employee['address'];
   status: string;
   contract_type: string;
   job_title: string;
@@ -22,6 +24,7 @@ export interface EmployeeRow {
   manager_id: string | null;
   start_date: string;
   end_date: string | null;
+  /** bigint em menor unidade; a camada o devolve como número. */
   salary_minor: number | null;
   salary_currency: string | null;
   document_key: string | null;
@@ -32,7 +35,7 @@ export interface EmployeeRow {
 }
 
 export async function listEmployees(
-  db: D1Database,
+  db: Database,
   tenantId: string,
   filter: EmployeeFilter,
   page: PageQuery,
@@ -53,8 +56,11 @@ export async function listEmployees(
     params.push(filter.managerId);
   }
   if (filter.q) {
-    where.push('e.rowid IN (SELECT rowid FROM employees_fts WHERE employees_fts MATCH ?)');
-    params.push(`${filter.q.replace(/["\s]+/g, ' ').trim()}*`);
+    const query = searchQuery(filter.q);
+    if (query) {
+      where.push(`e.search @@ to_tsquery('simple', ?)`);
+      params.push(query);
+    }
   }
   if (page.cursor) {
     const { createdAt, id } = decodeCursor(page.cursor);
@@ -82,13 +88,13 @@ export async function listEmployees(
 }
 
 export async function findEmployeeRow(
-  db: D1Database,
+  db: Database,
   tenantId: string,
   id: string,
 ): Promise<EmployeeRow | null> {
   return db
-    .prepare('SELECT * FROM employees WHERE id = ? AND tenant_id = ?')
-    .bind(id, tenantId)
+    .prepare('SELECT * FROM employees WHERE tenant_id = ? AND id = ?')
+    .bind(tenantId, id)
     .first<EmployeeRow>();
 }
 
@@ -131,12 +137,28 @@ export async function toFullDto(env: BaseBindings, r: EmployeeRow): Promise<Empl
     phone: r.phone,
     dateOfBirth: r.date_of_birth,
     nationalId: await decryptPii(env, r.national_id_enc, r.id),
-    address: r.address ? (JSON.parse(r.address) as Employee['address']) : null,
+    address: r.address ?? null,
     salary:
       r.salary_minor !== null && r.salary_currency
         ? money(r.salary_minor, r.salary_currency)
         : null,
   };
+}
+
+/**
+ * Texto digitado -> tsquery de prefixo, na mesma dobra de acento da coluna
+ * `search` ("alvaro" acha "Álvaro"). Só letras e dígitos sobrevivem, então o
+ * valor não carrega operador de tsquery; ainda assim vai como parâmetro.
+ * Devolve null quando não sobra nenhum termo.
+ */
+export function searchQuery(input: string): string | null {
+  const terms = input
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  return terms.length ? terms.map((t) => `${t}:*`).join(' & ') : null;
 }
 
 export function encodeCursor(createdAt: string, id: string): string {

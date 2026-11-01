@@ -1039,6 +1039,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20250508.0
         version: 4.20260702.1
+      '@electric-sql/pglite':
+        specifier: ^0.5.14
+        version: 0.5.14
       wrangler:
         specifier: ^4.14.0
         version: 4.123.0(@cloudflare/workers-types@4.20260702.1)
