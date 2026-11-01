@@ -1,3 +1,4 @@
+import type { Database } from '@ssm/worker-common';
 import type {
   Environment,
   EnvironmentFilter,
@@ -23,10 +24,11 @@ export interface TicketRow {
   resolved_at: string | null;
   closed_at: string | null;
   response_due_at: string;
-  response_breached: number;
+  response_breached: boolean;
   paused_minutes: number;
   waiting_since: string | null;
-  timeline: string;
+  /** jsonb: o driver já devolve o array. */
+  timeline: Ticket['timeline'];
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -47,8 +49,9 @@ export interface EnvironmentRow {
   response_sev1_minutes: number;
   response_sev2_minutes: number;
   response_sev3_minutes: number;
-  tags: string;
-  next_window: string | null;
+  /** jsonb: o driver já devolve o array/objeto. */
+  tags: string[];
+  next_window: Environment['nextWindow'];
   notes: string | null;
   created_at: string;
   created_by: string | null;
@@ -57,7 +60,7 @@ export interface EnvironmentRow {
 }
 
 export async function listTickets(
-  db: D1Database,
+  db: Database,
   tenantId: string,
   filter: TicketFilter,
   page: PageQuery,
@@ -86,13 +89,16 @@ export async function listTickets(
     // aberto cujo prazo passou sem resposta está descumprido agora, mesmo que
     // a marca só entre quando alguém finalmente responder.
     where.push(
-      `(t.response_breached = 1
-        OR (t.first_response_at IS NULL AND t.response_due_at < strftime('%Y-%m-%dT%H:%M:%fZ','now')))`,
+      `(t.response_breached
+        OR (t.first_response_at IS NULL AND t.response_due_at < now()))`,
     );
   }
   if (filter.q) {
-    where.push('t.rowid IN (SELECT rowid FROM tickets_fts WHERE tickets_fts MATCH ?)');
-    params.push(`${filter.q.replace(/["\s]+/g, ' ').trim()}*`);
+    const query = searchQuery(filter.q);
+    if (query) {
+      where.push(`t.search @@ to_tsquery('simple', ?)`);
+      params.push(query);
+    }
   }
   if (page.cursor) {
     const { createdAt, id } = decodeCursor(page.cursor);
@@ -117,18 +123,18 @@ export async function listTickets(
 }
 
 export async function findTicketRow(
-  db: D1Database,
+  db: Database,
   tenantId: string,
   id: string,
 ): Promise<TicketRow | null> {
   return db
-    .prepare('SELECT * FROM tickets WHERE id = ? AND tenant_id = ?')
-    .bind(id, tenantId)
+    .prepare('SELECT * FROM tickets WHERE tenant_id = ? AND id = ?')
+    .bind(tenantId, id)
     .first<TicketRow>();
 }
 
 export async function listEnvironments(
-  db: D1Database,
+  db: Database,
   tenantId: string,
   filter: EnvironmentFilter,
 ): Promise<EnvironmentRow[]> {
@@ -154,13 +160,13 @@ export async function listEnvironments(
 }
 
 export async function findEnvironmentRow(
-  db: D1Database,
+  db: Database,
   tenantId: string,
   id: string,
 ): Promise<EnvironmentRow | null> {
   return db
-    .prepare('SELECT * FROM environments WHERE id = ? AND tenant_id = ?')
-    .bind(id, tenantId)
+    .prepare('SELECT * FROM environments WHERE tenant_id = ? AND id = ?')
+    .bind(tenantId, id)
     .first<EnvironmentRow>();
 }
 
@@ -182,9 +188,9 @@ export function toTicketDto(t: TicketRow): Ticket {
     resolvedAt: t.resolved_at,
     closedAt: t.closed_at,
     responseDueAt: t.response_due_at,
-    responseBreached: t.response_breached === 1,
+    responseBreached: t.response_breached,
     pausedMinutes: t.paused_minutes,
-    timeline: JSON.parse(t.timeline) as Ticket['timeline'],
+    timeline: t.timeline,
     createdAt: t.created_at,
     createdBy: t.created_by,
     updatedAt: t.updated_at,
@@ -209,14 +215,29 @@ export function toEnvironmentDto(e: EnvironmentRow): Environment {
       sev2: e.response_sev2_minutes,
       sev3: e.response_sev3_minutes,
     },
-    tags: JSON.parse(e.tags) as string[],
-    nextWindow: e.next_window ? (JSON.parse(e.next_window) as Environment['nextWindow']) : null,
+    tags: e.tags,
+    nextWindow: e.next_window ?? null,
     notes: e.notes,
     createdAt: e.created_at,
     createdBy: e.created_by,
     updatedAt: e.updated_at,
     updatedBy: e.updated_by,
   };
+}
+
+/**
+ * Texto digitado -> tsquery de prefixo, na mesma dobra de acento da coluna
+ * `search`. Só letras e dígitos sobrevivem, então o valor não carrega operador
+ * de tsquery; ainda assim vai como parâmetro. null quando não sobra termo.
+ */
+export function searchQuery(input: string): string | null {
+  const terms = input
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  return terms.length ? terms.map((t) => `${t}:*`).join(' & ') : null;
 }
 
 export function encodeCursor(createdAt: string, id: string): string {

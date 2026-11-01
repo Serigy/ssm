@@ -19,6 +19,8 @@ import {
   Coordinator,
   type AppEnv,
   withMonitoring,
+  openFromBinding,
+  type Database,
 } from '@ssm/worker-common';
 import { z } from 'zod';
 import {
@@ -41,7 +43,8 @@ import {
   toTicketDto,
 } from './queries.js';
 
-const app = createApp('/api/operations');
+// Operações já está no Neon (ADR 0014): `postgres` abre a conexão da requisição.
+const app = createApp('/api/operations', { postgres: true });
 const TICKETS = '/api/operations/v1/tickets';
 const ENVIRONMENTS = '/api/operations/v1/environments';
 const SLA = '/api/operations/v1/sla';
@@ -53,7 +56,7 @@ app.get(TICKETS, requireAuth(), requirePermissions('operations:ticket:read'), as
     ticketFilterSchema.merge(pageQuerySchema),
     Object.fromEntries(new URL(c.req.url).searchParams),
   );
-  const { rows, nextCursor } = await listTickets(c.env.DB, c.get('actor').tenantId, filter, {
+  const { rows, nextCursor } = await listTickets(c.get('db'), c.get('actor').tenantId, filter, {
     limit,
     cursor,
     sort,
@@ -62,7 +65,7 @@ app.get(TICKETS, requireAuth(), requirePermissions('operations:ticket:read'), as
 });
 
 app.get(`${TICKETS}/:id`, requireAuth(), requirePermissions('operations:ticket:read'), async (c) => {
-  const row = await findTicketRow(c.env.DB, c.get('actor').tenantId, c.req.param('id'));
+  const row = await findTicketRow(c.get('db'), c.get('actor').tenantId, c.req.param('id'));
   if (!row) throw HttpProblem.notFound(`Chamado ${c.req.param('id')} não encontrado.`);
   return c.json(toTicketDto(row));
 });
@@ -70,7 +73,7 @@ app.get(`${TICKETS}/:id`, requireAuth(), requirePermissions('operations:ticket:r
 app.post(TICKETS, requireAuth(), requirePermissions('operations:ticket:create'), async (c) => {
   const dto = parse(createTicketSchema, await c.req.json().catch(() => null));
   const actor = c.get('actor');
-  const ticket = await createTicket(c.env, actor.tenantId, actor.id, dto, c.get('traceId'));
+  const ticket = await createTicket(c.env, c.get('db'), actor.tenantId, actor.id, dto, c.get('traceId'));
   c.header('Location', `${TICKETS}/${ticket.id}`);
   return c.json(ticket, 201);
 });
@@ -86,6 +89,7 @@ app.post(
     return c.json(
       await transitionTicket(
         c.env,
+        c.get('db'),
         actor.tenantId,
         actor.id,
         c.req.param('id'),
@@ -105,7 +109,7 @@ app.post(
     const dto = parse(assignTicketSchema, await c.req.json().catch(() => null));
     const actor = c.get('actor');
     return c.json(
-      await assignTicket(c.env, actor.tenantId, actor.id, c.req.param('id'), dto.assigneeId),
+      await assignTicket(c.get('db'), actor.tenantId, actor.id, c.req.param('id'), dto.assigneeId),
     );
   },
 );
@@ -121,7 +125,7 @@ app.get(
       environmentFilterSchema,
       Object.fromEntries(new URL(c.req.url).searchParams),
     );
-    const rows = await listEnvironments(c.env.DB, c.get('actor').tenantId, filter);
+    const rows = await listEnvironments(c.get('db'), c.get('actor').tenantId, filter);
     return c.json({ items: rows.map(toEnvironmentDto), nextCursor: null });
   },
 );
@@ -131,7 +135,7 @@ app.get(
   requireAuth(),
   requirePermissions('operations:environment:read'),
   async (c) => {
-    const row = await findEnvironmentRow(c.env.DB, c.get('actor').tenantId, c.req.param('id'));
+    const row = await findEnvironmentRow(c.get('db'), c.get('actor').tenantId, c.req.param('id'));
     if (!row) throw HttpProblem.notFound(`Ambiente ${c.req.param('id')} não encontrado.`);
     return c.json(toEnvironmentDto(row));
   },
@@ -144,7 +148,7 @@ app.post(
   async (c) => {
     const dto = parse(createEnvironmentSchema, await c.req.json().catch(() => null));
     const actor = c.get('actor');
-    const environment = await createEnvironment(c.env, actor.tenantId, actor.id, dto);
+    const environment = await createEnvironment(c.get('db'), actor.tenantId, actor.id, dto);
     c.header('Location', `${ENVIRONMENTS}/${environment.id}`);
     return c.json(environment, 201);
   },
@@ -157,7 +161,7 @@ app.patch(
   async (c) => {
     const dto = parse(updateEnvironmentSchema, await c.req.json().catch(() => null));
     const actor = c.get('actor');
-    return c.json(await updateEnvironment(c.env, actor.tenantId, actor.id, c.req.param('id'), dto));
+    return c.json(await updateEnvironment(c.get('db'), actor.tenantId, actor.id, c.req.param('id'), dto));
   },
 );
 
@@ -169,7 +173,7 @@ app.post(
   async (c) => {
     const dto = parse(scheduleWindowSchema, await c.req.json().catch(() => null));
     const actor = c.get('actor');
-    return c.json(await scheduleWindow(c.env, actor.tenantId, actor.id, c.req.param('id'), dto));
+    return c.json(await scheduleWindow(c.get('db'), actor.tenantId, actor.id, c.req.param('id'), dto));
   },
 );
 
@@ -190,7 +194,7 @@ app.get(SLA, requireAuth(), requirePermissions('operations:sla:read'), async (c)
     binds.push(month);
   }
 
-  const { results } = await c.env.DB.prepare(
+  const { results } = await c.get('db').prepare(
     `SELECT * FROM sla_periods WHERE ${where.join(' AND ')} ORDER BY month DESC, environment_code LIMIT 200`,
   )
     .bind(...binds)
@@ -211,7 +215,7 @@ app.post(
   async (c) => {
     const dto = parse(reckonSlaSchema, await c.req.json().catch(() => null));
     const actor = c.get('actor');
-    return c.json(await reckonSla(c.env, actor.tenantId, actor.id, dto, c.get('traceId')));
+    return c.json(await reckonSla(c.get('db'), actor.tenantId, actor.id, dto, c.get('traceId')));
   },
 );
 
@@ -229,8 +233,12 @@ export default withMonitoring({
   fetch: app.fetch,
 
   async scheduled(_c: ScheduledController, env: AppEnv['Bindings'], ctx: ExecutionContext) {
-    ctx.waitUntil(drainOutbox(env));
-    ctx.waitUntil(markBreachedResponses(env));
+    // Não passa pelo Hono, então abre e fecha a própria conexão — uma para as
+    // duas tarefas, fechada quando ambas terminam.
+    const db = openFromBinding(env.HYPERDRIVE);
+    ctx.waitUntil(
+      Promise.all([drainOutbox(env, db), markBreachedResponses(db)]).finally(() => db.close()),
+    );
   },
 } satisfies ExportedHandler<AppEnv['Bindings']>);
 
@@ -242,36 +250,44 @@ export default withMonitoring({
  * interessa ao relatório mensal. O filtro `breached` da listagem já cobre o
  * caso em tempo de consulta; esta varredura grava, para a apuração do mês não
  * depender de quando alguém olhou.
+ *
+ * Varre todos os tenants de propósito: é manutenção da tabela, sem requisição.
  */
-async function markBreachedResponses(env: AppEnv['Bindings']): Promise<void> {
-  const result = await env.DB.prepare(
-    `UPDATE tickets
-        SET response_breached = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-      WHERE response_breached = 0
-        AND first_response_at IS NULL
-        AND response_due_at < strftime('%Y-%m-%dT%H:%M:%fZ','now')
-        AND status NOT IN ('cancelled','closed')`,
-  ).run();
+export async function markBreachedResponses(db: Database): Promise<number> {
+  const result = await db
+    .prepare(
+      `UPDATE tickets
+          SET response_breached = true, updated_at = now()
+        WHERE NOT response_breached
+          AND first_response_at IS NULL
+          AND response_due_at < now()
+          AND status NOT IN ('cancelled','closed')`,
+    )
+    .run();
   if (result.meta.changes) {
     console.warn(
       JSON.stringify({ event: 'operations.ticket.response_breached', count: result.meta.changes }),
     );
   }
+  return result.meta.changes;
 }
 
-async function drainOutbox(env: AppEnv['Bindings']): Promise<void> {
-  const { results } = await env.DB.prepare(
-    `SELECT id, type, payload, tenant_id, actor_id, correlation_id
-       FROM outbox WHERE published_at IS NULL AND attempts < 5
-      ORDER BY created_at LIMIT 50`,
-  ).all<{
-    id: string;
-    type: string;
-    payload: string;
-    tenant_id: string;
-    actor_id: string | null;
-    correlation_id: string;
-  }>();
+export async function drainOutbox(env: AppEnv['Bindings'], db: Database): Promise<void> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, type, payload, tenant_id, actor_id, correlation_id
+         FROM outbox WHERE published_at IS NULL AND attempts < 5
+        ORDER BY created_at LIMIT 50`,
+    )
+    .all<{
+      id: string;
+      type: string;
+      /** jsonb: o driver já devolve o objeto. */
+      payload: unknown;
+      tenant_id: string;
+      actor_id: string | null;
+      correlation_id: string;
+    }>();
 
   for (const row of results) {
     try {
@@ -279,7 +295,7 @@ async function drainOutbox(env: AppEnv['Bindings']): Promise<void> {
       await env.QUEUE_FINANCIAL.send({
         id: row.id,
         type: row.type,
-        data: JSON.parse(row.payload),
+        data: row.payload,
         tenantId: row.tenant_id,
         actorId: row.actor_id,
         correlationId: row.correlation_id,
@@ -287,13 +303,10 @@ async function drainOutbox(env: AppEnv['Bindings']): Promise<void> {
         source: 'operations-worker',
         version: 1,
       });
-      await env.DB.prepare(
-        `UPDATE outbox SET published_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
-      )
-        .bind(row.id)
-        .run();
+      await db.prepare('UPDATE outbox SET published_at = now() WHERE id = ?').bind(row.id).run();
     } catch (err) {
-      await env.DB.prepare('UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?')
+      await db
+        .prepare('UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?')
         .bind(String(err).slice(0, 500), row.id)
         .run();
     }

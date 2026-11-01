@@ -220,10 +220,15 @@ function operationsSql(): string {
       ref: null, tags: ['dados', 'bi'] },
   ];
 
-  const lines = ['DELETE FROM sla_periods;', 'DELETE FROM tickets;', 'DELETE FROM environments;'];
+  const lines = [
+    'DELETE FROM operations.outbox;',
+    'DELETE FROM operations.sla_periods;',
+    'DELETE FROM operations.tickets;',
+    'DELETE FROM operations.environments;',
+  ];
   for (const e of envs) {
     lines.push(
-      `INSERT INTO environments (id, tenant_id, code, name, kind, status, region, provider,
+      `INSERT INTO operations.environments (id, tenant_id, code, name, kind, status, region, provider,
          contract_ref, availability_target_bps, tags, created_by, updated_by)
        VALUES (${q(e.id)}, ${q(TENANT)}, ${q(e.code)}, ${q(e.name)}, ${q(e.kind)}, 'operational',
          'sa-east-1', 'AWS', ${e.ref ? q(e.ref) : 'NULL'}, ${e.target},
@@ -250,7 +255,7 @@ function operationsSql(): string {
         note: `Chamado aberto com severidade ${t.sev}.` },
     ];
     lines.push(
-      `INSERT INTO tickets (id, tenant_id, number, subject, description, severity, status,
+      `INSERT INTO operations.tickets (id, tenant_id, number, subject, description, severity, status,
          environment_id, environment_code, opened_at, first_response_at, response_due_at,
          response_breached, waiting_since, timeline, created_by, updated_by)
        VALUES (${q(crypto.randomUUID())}, ${q(TENANT)}, ${t.num}, ${q(t.subject)},
@@ -258,7 +263,7 @@ function operationsSql(): string {
          ${q(t.env.code)}, ${q(opened.toISOString())},
          ${t.responded ? q(new Date(opened.getTime() + 8 * 60_000).toISOString()) : 'NULL'},
          ${q(new Date(opened.getTime() + dueMin * 60_000).toISOString())},
-         ${!t.responded && t.agoMin > dueMin ? 1 : 0},
+         ${!t.responded && t.agoMin > dueMin ? 'true' : 'false'},
          ${t.status === 'waiting_customer' ? q(new Date(now - 60 * 60_000).toISOString()) : 'NULL'},
          ${q(JSON.stringify(timeline))}, ${q(USERS.oncall)}, ${q(USERS.oncall)});`,
     );
@@ -279,7 +284,7 @@ function operationsSql(): string {
   const downtime = Math.round((outageEnd.getTime() - outageStart.getTime()) / 60_000);
 
   lines.push(
-    `INSERT INTO tickets (id, tenant_id, number, subject, description, severity, status,
+    `INSERT INTO operations.tickets (id, tenant_id, number, subject, description, severity, status,
        environment_id, environment_code, opened_at, first_response_at, resolved_at, closed_at,
        response_due_at, response_breached, timeline, created_by, updated_by)
      VALUES (${q(crypto.randomUUID())}, ${q(TENANT)}, 4790,
@@ -288,7 +293,7 @@ function operationsSql(): string {
        'sev1', 'closed', ${q(prod.id)}, ${q(prod.code)}, ${q(outageStart.toISOString())},
        ${q(new Date(outageStart.getTime() + 11 * 60_000).toISOString())},
        ${q(outageEnd.toISOString())}, ${q(outageEnd.toISOString())},
-       ${q(new Date(outageStart.getTime() + 15 * 60_000).toISOString())}, 0, '[]',
+       ${q(new Date(outageStart.getTime() + 15 * 60_000).toISOString())}, false, '[]',
        ${q(USERS.oncall)}, ${q(USERS.oncall)});`,
   );
 
@@ -298,11 +303,11 @@ function operationsSql(): string {
   const creditMinor = computeSlaCredit(achievedBps, prod.target, monthlyFeeMinor);
 
   lines.push(
-    `INSERT INTO sla_periods (id, tenant_id, environment_id, environment_code, month,
+    `INSERT INTO operations.sla_periods (id, tenant_id, environment_id, environment_code, month,
        measured_minutes, downtime_minutes, achieved_bps, target_bps, breached,
        credit_minor, credit_currency)
      VALUES (${q(crypto.randomUUID())}, ${q(TENANT)}, ${q(prod.id)}, ${q(prod.code)}, '2026-07-01',
-       ${julyMinutes}, ${downtime}, ${achievedBps}, ${prod.target}, ${creditMinor > 0 ? 1 : 0},
+       ${julyMinutes}, ${downtime}, ${achievedBps}, ${prod.target}, ${creditMinor > 0 ? 'true' : 'false'},
        ${creditMinor > 0 ? creditMinor : 'NULL'}, ${creditMinor > 0 ? "'BRL'" : 'NULL'});`,
   );
 
@@ -341,7 +346,7 @@ if (target === 'identity' && (remote || envName !== 'dev')) {
 
 // Módulos já no Neon (ADR 0014). A semente só alcança o Neon de desenvolvimento,
 // com o papel do próprio módulo; hmg e prd não são alvo desta ferramenta.
-const NEON_MODULES = ['identity', 'hr'];
+const NEON_MODULES = ['identity', 'hr', 'operations'];
 if (NEON_MODULES.includes(target) && (remote || envName !== 'dev')) {
   console.error(`${target} está no Neon; a semente só grava no banco de desenvolvimento. Recusado.`);
   process.exit(1);

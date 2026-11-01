@@ -71,6 +71,7 @@ emit legal      JWT_PUBLIC_KEY=jwt_public_key.pem \
                 R2_ACCESS_KEY_ID=r2_access_key_id \
                 R2_SECRET_ACCESS_KEY=r2_secret_access_key
 emit operations JWT_PUBLIC_KEY=jwt_public_key.pem
+neon_env operations
 emit gateway    JWT_PUBLIC_KEY=jwt_public_key.pem
 # Só o Worker de pessoas recebe a chave de cifra do CPF.
 emit hr         JWT_PUBLIC_KEY=jwt_public_key.pem PII_ENCRYPTION_KEY=pii_encryption_key
