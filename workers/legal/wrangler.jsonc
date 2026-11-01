@@ -22,6 +22,7 @@
     "port": 8804,
     "local_protocol": "http"
   },
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "vars": {
     "ENVIRONMENT": "dev",
     "R2_BUCKET_NAME": "ssm-documents-dev",
@@ -111,8 +112,10 @@
   "env": {
     "hmg": {
       "name": "ssm-legal-hmg",
+      "version_metadata": { "binding": "CF_VERSION_METADATA" },
       "vars": {
         "ENVIRONMENT": "hmg",
+        "SENTRY_DSN": "https://c57ffbaf3bbdbe0bfadc227e4cf4dfaf@o4504600654118912.ingest.us.sentry.io/4512357145378816",
         "R2_BUCKET_NAME": "ssm-documents-hmg",
         "R2_ACCOUNT_ID": "86dd3c836ae52e572ce13a51e3d63390",
         "SERVICE_NAME": "legal-worker",
@@ -199,8 +202,10 @@
     },
     "prd": {
       "name": "ssm-legal",
+      "version_metadata": { "binding": "CF_VERSION_METADATA" },
       "vars": {
         "ENVIRONMENT": "prd",
+        "SENTRY_DSN": "https://c57ffbaf3bbdbe0bfadc227e4cf4dfaf@o4504600654118912.ingest.us.sentry.io/4512357145378816",
         "R2_BUCKET_NAME": "ssm-documents",
         "R2_ACCOUNT_ID": "86dd3c836ae52e572ce13a51e3d63390",
         "SERVICE_NAME": "legal-worker",

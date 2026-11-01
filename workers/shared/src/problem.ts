@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import { PROBLEM_TYPES, type Problem } from '@ssm/contracts';
+import { captureUnexpected } from './monitoring.js';
 
 /**
  * RFC 9457, igual ao ProblemDetailsFilter do NestJS.
@@ -71,6 +72,7 @@ export function problemResponse(
   // Erro inesperado nunca vaza a mensagem: ela vai para o log com o traceId, e
   // o chamador recebe o id. Mesma regra do filtro do NestJS, mesma razão.
   console.error(JSON.stringify({ traceId, path: new URL(c.req.url).pathname, err: String(err) }));
+  captureUnexpected(err, traceId);
   const body: Problem = {
     type: PROBLEM_TYPES.internal,
     title: 'Internal Server Error',

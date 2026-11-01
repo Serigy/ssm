@@ -38,7 +38,7 @@ Os três caminhos terminam no mesmo lugar. A aplicação lê
 | `r2_access_key_id` | financial, hr, legal | 90 dias | Vault |
 | `r2_secret_access_key` | financial, hr, legal | 90 dias | Vault |
 | `session_secret` | gateway | 90 dias | Vault |
-| `aikido_token` | só CI | 180 dias | Segredo do GitHub Actions |
+| `aikido_token` | `make aikido` | 180 dias | `secrets/local/` |
 
 A coluna "quem recebe" é imposta, não sugerida: o `secretKeys` de cada serviço no
 `values.yaml` vira uma lista `items` na projeção do volume, e o pod só monta

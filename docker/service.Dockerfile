@@ -27,7 +27,12 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 FROM deps AS build
 ARG APP
 RUN test -n "$APP" || (echo "APP build-arg is required" && exit 1)
-RUN pnpm exec nest build -p apps/${APP}/tsconfig.build.json
+# Same command as the Nx build target. `nest` is a dependency of each app and
+# `tsc-alias` of the workspace root, so `pnpm exec` at the root cannot find the
+# first one: both .bin directories have to be on the PATH.
+RUN export PATH="/repo/apps/${APP}/node_modules/.bin:/repo/node_modules/.bin:$PATH" && \
+    nest build -p apps/${APP}/tsconfig.build.json && \
+    tsc-alias -p apps/${APP}/tsconfig.build.json
 
 # tsc emits a tree rooted at the workspace, because each service compiles the
 # shared libs from source alongside its own code. Rather than leak that layout
@@ -39,7 +44,7 @@ RUN cd apps/${APP}/dist && \
 
 # Prune to production dependencies for just this app, so the runtime image
 # carries no compilers, no test frameworks and no sibling services.
-RUN pnpm --filter "@ssm/${APP}..." deploy --prod --legacy /out
+RUN pnpm --filter "@ssm/${APP}" deploy --prod --legacy /out
 
 # --- runtime ----------------------------------------------------------------
 FROM node:${NODE_VERSION} AS runtime

@@ -81,15 +81,20 @@ export default defineConfig({
      *
      * A ordem importa: `/api/v1` (o status agregado) precisa vir antes da regra
      * genérica, senão ele seria capturado por ela.
+     *
+     * Com `SSM_API_GATEWAY` definido (`make web-docker`), tudo vai para o gateway
+     * da pilha em contêiner, mantendo a mesma origem única.
      */
-    proxy: {
-      '/api/identity': { target: 'http://localhost:8801', changeOrigin: true },
-      '/api/financial': { target: 'http://localhost:8802', changeOrigin: true },
-      '/api/hr': { target: 'http://localhost:8803', changeOrigin: true },
-      '/api/legal': { target: 'http://localhost:8804', changeOrigin: true },
-      '/api/operations': { target: 'http://localhost:8805', changeOrigin: true },
-      '/api/v1': { target: 'http://localhost:8800', changeOrigin: true },
-    },
+    proxy: process.env.SSM_API_GATEWAY
+      ? { '/api': { target: process.env.SSM_API_GATEWAY, changeOrigin: true } }
+      : {
+          '/api/identity': { target: 'http://localhost:8801', changeOrigin: true },
+          '/api/financial': { target: 'http://localhost:8802', changeOrigin: true },
+          '/api/hr': { target: 'http://localhost:8803', changeOrigin: true },
+          '/api/legal': { target: 'http://localhost:8804', changeOrigin: true },
+          '/api/operations': { target: 'http://localhost:8805', changeOrigin: true },
+          '/api/v1': { target: 'http://localhost:8800', changeOrigin: true },
+        },
   },
   build: {
     target: 'esnext',

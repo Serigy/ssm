@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import {
   AppShell,
   Badge,

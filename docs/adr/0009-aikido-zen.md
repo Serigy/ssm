@@ -2,6 +2,9 @@
 
 - **Estado:** Aceita
 - **Data:** 2026-08-17
+- **Atualização (2026-11-01):** a varredura de CI da Aikido saiu do pipeline. Zen
+  continua como descrito aqui. Dependências ficam com `pnpm audit` e Trivy; não
+  há mais SAST nem IaC no CI.
 
 ## Contexto
 

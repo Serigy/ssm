@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
  * End-to-end tests against a running stack.
  *
  * These do not start anything: bring the environment up first with
- *   make infra && make services && make web
+ *   make infra && make services && make web-docker
  * That is deliberate. The federated remotes are separate dev servers with their
  * own ports, and a webServer block that started four of them would hide exactly
  * the class of failure these tests exist to catch — a remote that is not

@@ -23,6 +23,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 OUT="$ROOT/dist/pages-$ENV_NAME"
+# O DSN vai para o navegador de qualquer forma: só escreve eventos, não lê nada.
+SENTRY_DSN="https://71cfb0837a680268f47ce443dc3cd21a@o4504600654118912.ingest.us.sentry.io/4512357145444352"
+RELEASE="$(git rev-parse --short=12 HEAD)"
 REMOTES=(financial hr legal operations)
 
 rm -rf "$OUT"
@@ -51,6 +54,9 @@ printf '  shell              '
      VITE_REMOTE_HR="/mfe/hr/remoteEntry.js" \
      VITE_REMOTE_LEGAL="/mfe/legal/remoteEntry.js" \
      VITE_REMOTE_OPERATIONS="/mfe/operations/remoteEntry.js" \
+     VITE_SENTRY_DSN="$SENTRY_DSN" \
+     VITE_SENTRY_ENVIRONMENT="$ENV_NAME" \
+     VITE_SENTRY_RELEASE="$RELEASE" \
      npx vite build --outDir "$OUT" --emptyOutDir=false ) > /tmp/ssm-build-shell.log 2>&1 \
   && echo "ok" || { echo "FALHOU — ver /tmp/ssm-build-shell.log"; exit 1; }
 
@@ -81,5 +87,16 @@ echo
 echo "  pacote em ${OUT#$ROOT/}"
 du -sh "$OUT" | awk '{print "  tamanho: "$1}'
 echo
+# Os mapas vão ao Sentry e saem do pacote: publicados, entregariam o código-fonte
+# a qualquer visitante.
+if command -v sentry-cli >/dev/null; then
+  sentry-cli sourcemaps inject "$OUT"
+  sentry-cli sourcemaps upload --org serigy-tecnologia --project ssm-web \
+    --release "$RELEASE" "$OUT"
+else
+  echo "aviso: sentry-cli ausente; os source maps de $RELEASE não foram enviados" >&2
+fi
+find "$OUT" -name '*.map' -delete
+
 echo "Publicar:"
 echo "  npx wrangler pages deploy $OUT --project-name ssm-$ENV_NAME"

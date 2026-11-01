@@ -1,23 +1,109 @@
-# Use the latest 2.1 version of CircleCI pipeline process engine.
-# See: https://circleci.com/docs/reference/configuration-reference/
+# Runs after the merge: verifies the protected branches and deploys two of them.
+# The gate before the merge is .github/workflows/mr-check.yml.
+#
+#   development -> verify only; it has no remote environment
+#   staging     -> verify, deploy to hmg
+#   main        -> verify, wait for approval, deploy to prd
 version: 2.1
 
-# Orbs are reusable packages of CircleCI configuration that you may share across projects, enabling you to create encapsulated, parameterized commands, jobs, and executors that can be used across multiple projects.
-# See: https://circleci.com/docs/orbs/use/orb-intro/
-orbs:
-  # See the Node orb documentation here: https://circleci.com/developer/orbs/orb/circleci/node
-  node: circleci/node@5.2
+executors:
+  node:
+    docker:
+      # Keep the major in step with .nvmrc.
+      - image: cimg/node:22.22
+    resource_class: medium
+    environment:
+      NX_NO_CLOUD: 'true'
 
-# Orchestrate jobs using workflows
-# See: https://circleci.com/docs/guides/orchestrate/workflows/ & https://circleci.com/docs/reference/configuration-reference/#workflows
+commands:
+  setup:
+    steps:
+      - checkout
+
+      - run:
+          name: Instalar o pnpm da versão fixada em package.json
+          command: |
+            sudo npm install --global "$(node -p "require('./package.json').packageManager")"
+
+      - restore_cache:
+          keys:
+            - pnpm-v1-{{ checksum "pnpm-lock.yaml" }}
+
+      - run:
+          name: Instalar dependências
+          command: |
+            pnpm config set store-dir ~/.pnpm-store
+            pnpm install --frozen-lockfile
+
+      - save_cache:
+          key: pnpm-v1-{{ checksum "pnpm-lock.yaml" }}
+          paths:
+            - ~/.pnpm-store
+
+jobs:
+  check:
+    executor: node
+    steps:
+      - setup
+
+      - run:
+          name: Gerar segredos de teste
+          # The build imports code that reads the JWT public key at module init.
+          command: |
+            echo "export SSM_SECRETS_DIR=\"$PWD/secrets/local\"" >> "$BASH_ENV"
+            ./scripts/gen-secrets.sh
+
+      - run:
+          name: Lint, tipos, testes e build
+          # Two workers, one per vCPU of the medium resource class.
+          command: pnpm nx run-many -t lint,typecheck,test,build --parallel=2
+
+  deploy:
+    executor: node
+    parameters:
+      environment:
+        type: enum
+        enum: [hmg, prd]
+    steps:
+      - setup
+
+      - run:
+          name: Instalar o sentry-cli
+          command: sudo npm install --global @sentry/cli@3.8.2
+
+      - run:
+          name: Implantar em << parameters.environment >>
+          command: ./scripts/cf-deploy.sh << parameters.environment >>
+
 workflows:
-  sample: # This is the name of the workflow, feel free to change it to better match your workflow.
-    # Inside the workflow, you define the jobs you want to run.
+  entrega:
     jobs:
-      - node/test:
-          # This is the node version to use for the `cimg/node` tag
-          # Relevant tags can be found on the CircleCI Developer Hub
-          # https://circleci.com/developer/images/image/cimg/node
-          version: '16.10'
-          # If you are using yarn, change the line below from "npm" to "yarn"
-          pkg-manager: npm
+      - check:
+          filters:
+            branches:
+              only: [development, staging, main]
+
+      - deploy:
+          name: deploy-hmg
+          environment: hmg
+          context: ssm-hmg
+          requires: [check]
+          filters:
+            branches:
+              only: staging
+
+      - aprovar-prd:
+          type: approval
+          requires: [check]
+          filters:
+            branches:
+              only: main
+
+      - deploy:
+          name: deploy-prd
+          environment: prd
+          context: ssm-prd
+          requires: [aprovar-prd]
+          filters:
+            branches:
+              only: main

@@ -33,7 +33,7 @@ C4Context
   }
 
   System_Ext(r2, "Cloudflare R2", "PDFs de faturas e contratos assinados")
-  System_Ext(aikido, "Aikido", "Varredura de CI e firewall em aplicação (Zen)")
+  System_Ext(aikido, "Aikido", "Firewall em aplicação (Zen)")
 
   Rel(colaborador, app, "Usa", "HTTPS")
   Rel(admin, app, "Administra", "HTTPS")

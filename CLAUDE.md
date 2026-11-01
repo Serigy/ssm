@@ -62,7 +62,8 @@ de erro.
 make help          # tudo
 make dev           # sobe o ambiente
 make seed          # dados de demonstração
-make web           # front-ends com hot reload
+make web-docker    # front-ends com hot reload, contra o gateway do compose
+make web           # front-ends com hot reload, contra os Workers
 make affected      # lint + tipos + testes do que mudou
 make check         # o que o CI roda
 make openapi       # regenera as specs — faça commit do diff

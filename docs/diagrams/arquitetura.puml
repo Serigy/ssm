@@ -1,0 +1,57 @@
+@startuml arquitetura
+' O GitHub não renderiza PlantUML: depois de editar, gere o SVG com `make diagrams`.
+skinparam defaultFontName sans-serif
+skinparam shadowing false
+skinparam componentStyle rectangle
+
+package "Navegador" {
+  [shell] as shell
+  package "Módulos carregados em runtime" {
+    [Financeiro] as mfeFinanceiro
+    [Pessoas] as mfePessoas
+    [Jurídico] as mfeJuridico
+    [Operações] as mfeOperacoes
+  }
+}
+
+[gateway] as gateway
+
+package "Serviços" {
+  [identity] as identity
+  [financial] as financial
+  [hr] as hr
+  [legal] as legal
+  [ops] as ops
+}
+
+database "Postgres" as postgres
+database "MongoDB" as mongo
+queue "RabbitMQ" as rabbit
+storage "R2 (documentos)" as r2
+
+shell --> mfeFinanceiro
+shell --> mfePessoas
+shell --> mfeJuridico
+shell --> mfeOperacoes
+shell --> gateway : /api
+
+gateway --> identity
+gateway --> financial
+gateway --> hr
+gateway --> legal
+gateway --> ops
+
+identity --> postgres
+financial --> postgres
+hr --> postgres
+ops --> postgres
+legal --> mongo
+
+financial --> rabbit
+hr --> rabbit
+legal --> rabbit
+
+financial --> r2
+hr --> r2
+legal --> r2
+@enduml

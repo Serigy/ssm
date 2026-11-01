@@ -4,23 +4,9 @@ Gestão financeira, de pessoas e jurídica da Serigy Tecnologia e Marketing.
 Três módulos independentes sobre uma arquitetura de microsserviços em NestJS,
 com micro-frontends federados em React.
 
-```
-┌─ Navegador ─────────────────────────────────┐
-│  shell  ──carrega em runtime──▶  Financeiro │
-│                                  Pessoas    │
-│                                  Jurídico   │
-│                                  Operações  │
-└──────────────────┬──────────────────────────┘
-                   │ /api
-┌──────────────────▼──────────────────────────┐
-│  gateway                                    │
-├─────────────────────────────────────────────┤
-│ identity  financial   hr      legal    ops  │
-│ Postgres  Postgres  Postgres  MongoDB  Postgres│
-│         └──── RabbitMQ ────┘                │
-│              R2 (documentos)                │
-└─────────────────────────────────────────────┘
-```
+![Arquitetura do SSM: navegador, gateway, serviços, bancos e fila](docs/diagrams/arquitetura.svg)
+
+A fonte do diagrama está em [docs/diagrams/arquitetura.puml](docs/diagrams/arquitetura.puml).
 
 ## Começar
 
@@ -28,7 +14,7 @@ com micro-frontends federados em React.
 make bootstrap    # confere ferramentas, gera segredos, instala dependências
 make dev          # sobe a infraestrutura e os serviços
 make seed         # dados de demonstração
-make web          # shell + 3 remotes com hot reload
+make web-docker   # shell + 4 remotes com hot reload, contra o gateway do compose
 ```
 
 `http://localhost:4200` — entre com `admin@serigy.local` /
@@ -84,8 +70,14 @@ Comece por [docs/README.md](docs/README.md). Para entender *por que* algo é com
 
 ## Segurança
 
-Aikido Zen roda como firewall em aplicação nos cinco serviços; a varredura da
-Aikido roda no CI e semanalmente. Ver [docs/security/](docs/security/) e o
+Aikido Zen roda como firewall em aplicação nos cinco serviços. Ver [docs/security/](docs/security/) e o
 [ADR 0009](docs/adr/0009-aikido-zen.md).
 
-Vulnerabilidade encontrada: abra um issue **privado** e marque a plataforma.
+Vulnerabilidade encontrada: relate pela aba **Security** do GitHub, e não em um
+issue público.
+
+## Licença
+
+[GPL-3.0-or-later](LICENSE). O firewall Zen é AGPL-3.0, então quem distribuir os
+serviços NestJS com ele segue também os termos dessa licença. O nome e a marca
+Serigy não fazem parte da licença do código.

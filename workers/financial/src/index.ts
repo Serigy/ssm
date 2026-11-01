@@ -7,6 +7,8 @@ import {
   idempotent,
   downloadTicket,
   type AppEnv,
+  captureUnexpected,
+  withMonitoring,
 } from '@ssm/worker-common';
 import { z } from 'zod';
 import {
@@ -216,7 +218,7 @@ interface QueueEvent {
   correlationId: string;
 }
 
-export default {
+export default withMonitoring({
   fetch: app.fetch,
 
   /**
@@ -243,6 +245,7 @@ export default {
             err: String(err),
           }),
         );
+        captureUnexpected(err, message.body?.correlationId ?? message.id);
         message.retry();
       }
     }
@@ -260,7 +263,7 @@ export default {
   async scheduled(_controller: ScheduledController, env: AppEnv['Bindings'], ctx: ExecutionContext) {
     ctx.waitUntil(drainOutbox(env));
   },
-} satisfies ExportedHandler<AppEnv['Bindings'], QueueEvent>;
+} satisfies ExportedHandler<AppEnv['Bindings'], QueueEvent>);
 
 /**
  * O consumo é idempotente porque a entrega é ao-menos-uma-vez.

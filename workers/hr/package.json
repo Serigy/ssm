@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --persist-to ../.wrangler-state",
-    "deploy:hmg": "wrangler deploy --env hmg",
-    "deploy:prd": "wrangler deploy --env prd",
+    "deploy:hmg": "../../scripts/cf-deploy-worker.sh hmg",
+    "deploy:prd": "../../scripts/cf-deploy-worker.sh prd",
     "tail:hmg": "wrangler tail --env hmg",
     "types": "wrangler types",
     "typecheck": "tsc -p tsconfig.json --noEmit",

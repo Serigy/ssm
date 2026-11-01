@@ -443,8 +443,8 @@
     "version": "1.0.0",
     "contact": {
       "name": "Serigy Platform",
-      "url": "https://ssm.serigy.io",
-      "email": "platform@serigy.io"
+      "url": "https://ssm.serigy.net",
+      "email": "platform@serigy.net"
     }
   },
   "tags": [
@@ -471,7 +471,7 @@
       "description": "kind cluster"
     },
     {
-      "url": "https://api.ssm.serigy.io",
+      "url": "https://api.ssm.serigy.net",
       "description": "Production"
     }
   ],

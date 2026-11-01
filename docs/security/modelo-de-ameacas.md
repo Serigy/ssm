@@ -99,8 +99,7 @@ endereços estão cadastrados.
 
 ### Comprometimento de dependência
 
-**Controles:** `pnpm audit` e a varredura de dependências da Aikido no CI e
-semanalmente; Trivy nas imagens; contêiner não-root com raiz somente leitura e
+**Controles:** `pnpm audit` no CI e semanalmente; Trivy nas imagens; contêiner não-root com raiz somente leitura e
 todas as capabilities descartadas; NetworkPolicy limitando o egresso; e Zen
 instrumentando `child_process` e o cliente HTTP, que é por onde um pacote
 malicioso tipicamente exfiltra.
