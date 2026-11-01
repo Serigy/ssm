@@ -18,6 +18,8 @@ import {
   HttpProblem,
   withReservedNumber,
   type BaseBindings,
+  type Database,
+  type DbStatement,
 } from '@ssm/worker-common';
 import {
   findEnvironmentRow,
@@ -55,6 +57,7 @@ const iso = (d: Date = new Date()) => d.toISOString();
 
 export async function createTicket(
   env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   dto: CreateTicket,
@@ -62,7 +65,7 @@ export async function createTicket(
 ): Promise<Ticket> {
   let environment: EnvironmentRow | null = null;
   if (dto.environmentId) {
-    environment = await findEnvironmentRow(env.DB, tenantId, dto.environmentId);
+    environment = await findEnvironmentRow(db, tenantId, dto.environmentId);
     if (!environment) throw HttpProblem.notFound(`Ambiente ${dto.environmentId} não encontrado.`);
   }
 
@@ -71,7 +74,7 @@ export async function createTicket(
     ? responseMinutesFor(environment, dto.severity)
     : DEFAULT_RESPONSE_MINUTES[dto.severity];
 
-  const seed = await highestTicketNumber(env.DB, tenantId);
+  const seed = await highestTicketNumber(db, tenantId);
   const id = crypto.randomUUID();
 
   return withReservedNumber(env, tenantId, 'tickets', seed, async (number) => {
@@ -84,13 +87,13 @@ export async function createTicket(
       },
     ];
 
-    const statements = [
-      env.DB.prepare(
+    const statements: DbStatement[] = [
+      db.prepare(
         `INSERT INTO tickets (
            id, tenant_id, number, subject, description, kind, severity, status,
            environment_id, environment_code, assignee_id, opened_at,
            response_due_at, timeline, created_by, updated_by
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?::jsonb, ?, ?)`,
       ).bind(
         id,
         tenantId,
@@ -113,39 +116,44 @@ export async function createTicket(
     // Um sev1 num ambiente coloca o ambiente em incidente: a lista de ambientes
     // é o painel de quem está de plantão, e ela precisa refletir o que está
     // acontecendo sem que alguém tenha de atualizar dois lugares.
+    //
+    // O evento sai do mesmo comando que muda o ambiente: se outra pessoa já o
+    // pôs em incidente entre a leitura e a escrita, o UPDATE não move linha
+    // nenhuma e nenhum evento de "incidente aberto" é gravado.
     if (environment && dto.severity === 'sev1' && environment.status === 'operational') {
       statements.push(
-        env.DB.prepare(
+        eventAfter(
+          db,
           `UPDATE environments SET status = 'incident', updated_by = ?, updated_at = ?
-            WHERE id = ? AND tenant_id = ? AND status = 'operational'`,
-        ).bind(actorId, iso(), environment.id, tenantId),
-      );
-      statements.push(
-        outboxInsert(env, {
-          aggregateType: 'ticket',
-          aggregateId: id,
-          type: 'operations.incident.opened',
-          tenantId,
-          actorId,
-          correlationId,
-          payload: {
-            ticketId: id,
-            number,
-            environmentId: environment.id,
-            environmentCode: environment.code,
-            severity: dto.severity,
+            WHERE tenant_id = ? AND id = ? AND status = 'operational' RETURNING id`,
+          [actorId, iso(), tenantId, environment.id],
+          {
+            aggregateType: 'ticket',
+            aggregateId: id,
+            type: 'operations.incident.opened',
+            tenantId,
+            actorId,
+            correlationId,
+            payload: {
+              ticketId: id,
+              number,
+              environmentId: environment.id,
+              environmentCode: environment.code,
+              severity: dto.severity,
+            },
           },
-        }),
+        ),
       );
     }
 
-    await env.DB.batch(statements);
-    return toTicketDto((await findTicketRow(env.DB, tenantId, id))!);
+    await db.batch(statements);
+    return toTicketDto((await findTicketRow(db, tenantId, id))!);
   });
 }
 
 export async function transitionTicket(
   env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   id: string,
@@ -153,7 +161,7 @@ export async function transitionTicket(
   note: string | undefined,
   correlationId: string,
 ): Promise<Ticket> {
-  const t = await mustFindTicket(env, tenantId, id);
+  const t = await mustFindTicket(db, tenantId, id);
   const from = t.status as TicketStatus;
 
   if (!TRANSITIONS[from].includes(to)) {
@@ -173,8 +181,8 @@ export async function transitionTicket(
   const responseBreached =
     from === 'open' && !t.first_response_at
       ? nowIso > t.response_due_at
-        ? 1
-        : 0
+        ? true
+        : false
       : t.response_breached;
 
   // Acumula a pausa ao sair de waiting_customer, para o relógio de resolução
@@ -186,39 +194,69 @@ export async function transitionTicket(
   const waitingSince = to === 'waiting_customer' ? nowIso : null;
 
   const timeline: TicketEvent[] = [
-    ...(JSON.parse(t.timeline) as TicketEvent[]),
+    ...t.timeline,
     { at: nowIso, actorId, kind: 'status', note: note ?? `Estado alterado para ${to}.` },
   ];
 
-  const statements = [
-    env.DB.prepare(
-      `UPDATE tickets
+  const updateSql = `UPDATE tickets
           SET status = ?, first_response_at = ?, response_breached = ?,
               paused_minutes = ?, waiting_since = ?,
-              resolved_at = ?, closed_at = ?, timeline = ?,
+              resolved_at = ?, closed_at = ?, timeline = ?::jsonb,
               updated_by = ?, updated_at = ?
-        WHERE id = ? AND tenant_id = ? AND status = ?`,
-    ).bind(
-      to,
-      firstResponseAt,
-      responseBreached,
-      pausedMinutes,
-      waitingSince,
-      to === 'resolved' ? nowIso : t.resolved_at,
-      to === 'closed' ? nowIso : t.closed_at,
-      JSON.stringify(timeline),
-      actorId,
-      nowIso,
-      id,
-      tenantId,
-      from,
-    ),
+        WHERE tenant_id = ? AND id = ? AND status = ?`;
+  const updateParams = [
+    to,
+    firstResponseAt,
+    responseBreached,
+    pausedMinutes,
+    waitingSince,
+    to === 'resolved' ? nowIso : t.resolved_at,
+    to === 'closed' ? nowIso : t.closed_at,
+    JSON.stringify(timeline),
+    actorId,
+    nowIso,
+    tenantId,
+    id,
+    from,
   ];
 
+  let moved: boolean;
   if (to === 'resolved') {
+    // A mudança do chamado, o evento e a volta do ambiente a operacional são UM
+    // comando. Em dois comandos num batch, quem perdesse a corrida (a situação
+    // mudou entre a leitura e a escrita) ainda gravaria o evento de resolução e
+    // apagaria o alarme do ambiente — o `changes` do primeiro só era conferido
+    // depois de o batch já ter sido confirmado.
     const elapsed = Math.round((now.getTime() - new Date(t.opened_at).getTime()) / 60_000);
-    statements.push(
-      outboxInsert(env, {
+
+    // O ambiente volta a operacional quando o último sev1 aberto nele é
+    // resolvido — e só então: dois incidentes simultâneos não podem fazer o
+    // primeiro a fechar apagar o alarme do segundo.
+    const restoreEnv =
+      t.environment_id && t.severity === 'sev1'
+        ? `, restored AS (
+             UPDATE environments SET status = 'operational', updated_by = ?, updated_at = ?
+              WHERE tenant_id = ? AND id = ? AND status = 'incident'
+                AND EXISTS (SELECT 1 FROM moved)
+                AND NOT EXISTS (
+                  SELECT 1 FROM tickets o
+                   WHERE o.tenant_id = environments.tenant_id
+                     AND o.environment_id = environments.id
+                     AND o.severity = 'sev1'
+                     AND o.id <> ?
+                     AND o.status NOT IN ('resolved','closed','cancelled')
+                )
+              RETURNING id
+           )`
+        : '';
+    const restoreParams =
+      restoreEnv !== '' ? [actorId, nowIso, tenantId, t.environment_id, id] : [];
+
+    const result = await eventStatement(
+      db,
+      `moved AS (${updateSql} RETURNING id)${restoreEnv}`,
+      [...updateParams, ...restoreParams],
+      {
         aggregateType: 'ticket',
         aggregateId: id,
         type: 'operations.incident.resolved',
@@ -230,84 +268,70 @@ export async function transitionTicket(
           number: t.number,
           environmentId: t.environment_id,
           minutesToResolve: Math.max(0, elapsed - pausedMinutes),
-          responseBreached: responseBreached === 1,
+          responseBreached,
         },
-      }),
-    );
-
-    // O ambiente volta a operacional quando o último sev1 aberto nele é
-    // resolvido — e só então: dois incidentes simultâneos não podem fazer o
-    // primeiro a fechar apagar o alarme do segundo.
-    if (t.environment_id && t.severity === 'sev1') {
-      statements.push(
-        env.DB.prepare(
-          `UPDATE environments SET status = 'operational', updated_by = ?, updated_at = ?
-            WHERE id = ? AND tenant_id = ? AND status = 'incident'
-              AND NOT EXISTS (
-                SELECT 1 FROM tickets o
-                 WHERE o.environment_id = environments.id
-                   AND o.severity = 'sev1'
-                   AND o.id <> ?
-                   AND o.status NOT IN ('resolved','closed','cancelled')
-              )`,
-        ).bind(actorId, nowIso, t.environment_id, tenantId, id),
-      );
-    }
+      },
+    ).run();
+    moved = result.meta.changes > 0;
+  } else {
+    const result = await db.prepare(updateSql).bind(...updateParams).run();
+    moved = result.meta.changes > 0;
   }
 
-  const [updated] = await env.DB.batch(statements);
-  if (!updated || updated.meta.changes === 0) {
+  if (!moved) {
     throw HttpProblem.conflict('A situação do chamado mudou enquanto era alterada.');
   }
 
-  return toTicketDto((await findTicketRow(env.DB, tenantId, id))!);
+  return toTicketDto((await findTicketRow(db, tenantId, id))!);
 }
 
 export async function assignTicket(
-  env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   id: string,
   assigneeId: string | null,
 ): Promise<Ticket> {
-  const t = await mustFindTicket(env, tenantId, id);
+  await mustFindTicket(db, tenantId, id);
   const nowIso = iso();
-  const timeline: TicketEvent[] = [
-    ...(JSON.parse(t.timeline) as TicketEvent[]),
-    {
-      at: nowIso,
-      actorId,
-      kind: 'assigned',
-      note: assigneeId ? `Atribuído a ${assigneeId}.` : 'Atribuição removida.',
-    },
-  ];
+  const entry: TicketEvent = {
+    at: nowIso,
+    actorId,
+    kind: 'assigned',
+    note: assigneeId ? `Atribuído a ${assigneeId}.` : 'Atribuição removida.',
+  };
 
-  await env.DB.prepare(
-    `UPDATE tickets SET assignee_id = ?, timeline = ?, updated_by = ?, updated_at = ?
-      WHERE id = ? AND tenant_id = ?`,
-  )
-    .bind(assigneeId, JSON.stringify(timeline), actorId, nowIso, id, tenantId)
+  // O registro entra na linha do tempo pelo próprio banco (`timeline || novo`),
+  // e não lendo, somando em JavaScript e regravando: duas atribuições
+  // simultâneas perdiam uma das entradas.
+  await db
+    .prepare(
+      `UPDATE tickets
+          SET assignee_id = ?, timeline = timeline || ?::jsonb, updated_by = ?, updated_at = ?
+        WHERE tenant_id = ? AND id = ?`,
+    )
+    .bind(assigneeId, JSON.stringify([entry]), actorId, nowIso, tenantId, id)
     .run();
 
-  return toTicketDto((await findTicketRow(env.DB, tenantId, id))!);
+  return toTicketDto((await findTicketRow(db, tenantId, id))!);
 }
 
 // --- ambientes --------------------------------------------------------------
 
 export async function createEnvironment(
-  env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   dto: CreateEnvironment,
 ): Promise<Environment> {
   const id = crypto.randomUUID();
   try {
-    await env.DB.prepare(
+    await db.prepare(
       `INSERT INTO environments (
          id, tenant_id, code, name, kind, region, provider, contract_ref,
          availability_target_bps, response_sev1_minutes, response_sev2_minutes,
          response_sev3_minutes, tags, notes, created_by, updated_by
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?)`,
     )
       .bind(
         id,
@@ -331,29 +355,29 @@ export async function createEnvironment(
   } catch (err) {
     // O índice único é quem decide; capturar aqui só troca um 500 por uma
     // mensagem que diz o que fazer.
-    if (String(err).includes('UNIQUE')) {
+    if ((err as { code?: string }).code === '23505') {
       throw HttpProblem.conflict(`Já existe um ambiente com o código ${dto.code}.`);
     }
     throw err;
   }
-  return toEnvironmentDto((await findEnvironmentRow(env.DB, tenantId, id))!);
+  return toEnvironmentDto((await findEnvironmentRow(db, tenantId, id))!);
 }
 
 export async function updateEnvironment(
-  env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   id: string,
   dto: UpdateEnvironment,
 ): Promise<Environment> {
-  const e = await mustFindEnvironment(env, tenantId, id);
-  await env.DB.prepare(
+  const e = await mustFindEnvironment(db, tenantId, id);
+  await db.prepare(
     `UPDATE environments
         SET name = ?, kind = ?, region = ?, provider = ?, contract_ref = ?,
             availability_target_bps = ?, response_sev1_minutes = ?,
-            response_sev2_minutes = ?, response_sev3_minutes = ?, tags = ?,
+            response_sev2_minutes = ?, response_sev3_minutes = ?, tags = ?::jsonb,
             notes = ?, updated_by = ?, updated_at = ?
-      WHERE id = ? AND tenant_id = ?`,
+      WHERE tenant_id = ? AND id = ?`,
   )
     .bind(
       dto.name ?? e.name,
@@ -365,37 +389,37 @@ export async function updateEnvironment(
       dto.responseTargetMinutes?.sev1 ?? e.response_sev1_minutes,
       dto.responseTargetMinutes?.sev2 ?? e.response_sev2_minutes,
       dto.responseTargetMinutes?.sev3 ?? e.response_sev3_minutes,
-      dto.tags ? JSON.stringify(dto.tags) : e.tags,
+      JSON.stringify(dto.tags ?? e.tags),
       dto.notes ?? e.notes,
       actorId,
       iso(),
-      id,
       tenantId,
+      id,
     )
     .run();
-  return toEnvironmentDto((await findEnvironmentRow(env.DB, tenantId, id))!);
+  return toEnvironmentDto((await findEnvironmentRow(db, tenantId, id))!);
 }
 
 export async function scheduleWindow(
-  env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   id: string,
   window: MaintenanceWindow,
 ): Promise<Environment> {
-  await mustFindEnvironment(env, tenantId, id);
+  await mustFindEnvironment(db, tenantId, id);
   if (window.endsAt <= window.startsAt) {
     throw HttpProblem.badRequest('A janela precisa terminar depois de começar.');
   }
-  await env.DB.prepare(
-    `UPDATE environments SET next_window = ?, status = 'scheduled_window',
+  await db.prepare(
+    `UPDATE environments SET next_window = ?::jsonb, status = 'scheduled_window',
             updated_by = ?, updated_at = ?
-      WHERE id = ? AND tenant_id = ? AND status <> 'incident'`,
+      WHERE tenant_id = ? AND id = ? AND status <> 'incident'`,
   )
-    .bind(JSON.stringify(window), actorId, iso(), id, tenantId)
+    .bind(JSON.stringify(window), actorId, iso(), tenantId, id)
     .run();
 
-  return toEnvironmentDto((await findEnvironmentRow(env.DB, tenantId, id))!);
+  return toEnvironmentDto((await findEnvironmentRow(db, tenantId, id))!);
 }
 
 // --- SLA --------------------------------------------------------------------
@@ -407,21 +431,25 @@ export async function scheduleWindow(
  * olha de novo não é prova. Uma segunda chamada devolve o que já foi apurado.
  */
 export async function reckonSla(
-  env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   input: ReckonSla,
   correlationId: string,
 ): Promise<SlaPeriod> {
-  const existing = await env.DB.prepare(
-    'SELECT * FROM sla_periods WHERE tenant_id = ? AND environment_id = ? AND month = ?',
-  )
-    .bind(tenantId, input.environmentId, input.month)
-    .first<SlaPeriodRow>();
+  const find = () =>
+    db
+      .prepare(
+        'SELECT * FROM sla_periods WHERE tenant_id = ? AND environment_id = ? AND month = ?',
+      )
+      .bind(tenantId, input.environmentId, input.month)
+      .first<SlaPeriodRow>();
+
+  const existing = await find();
   if (existing) return toSlaDto(existing);
 
-  const e = await mustFindEnvironment(env, tenantId, input.environmentId);
-  const { measuredMinutes, downtimeMinutes } = await measure(env, tenantId, e, input.month);
+  const e = await mustFindEnvironment(db, tenantId, input.environmentId);
+  const { measuredMinutes, downtimeMinutes } = await measure(db, tenantId, e, input.month);
 
   const achievedBps = computeAvailabilityBps(measuredMinutes, downtimeMinutes);
   const breached = achievedBps < e.availability_target_bps;
@@ -430,34 +458,41 @@ export async function reckonSla(
     : 0;
 
   const id = crypto.randomUUID();
-  const statements = [
-    env.DB.prepare(
-      `INSERT INTO sla_periods (
+  const insertSql = `INSERT INTO sla_periods (
          id, tenant_id, environment_id, environment_code, month, measured_minutes,
          downtime_minutes, achieved_bps, target_bps, breached, credit_minor, credit_currency
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(
-      id,
-      tenantId,
-      e.id,
-      e.code,
-      input.month,
-      measuredMinutes,
-      downtimeMinutes,
-      achievedBps,
-      e.availability_target_bps,
-      breached ? 1 : 0,
-      creditMinor > 0 ? creditMinor : null,
-      creditMinor > 0 ? input.monthlyFee.currency.toUpperCase() : null,
-    ),
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (tenant_id, environment_id, month) DO NOTHING`;
+  const insertParams = [
+    id,
+    tenantId,
+    e.id,
+    e.code,
+    input.month,
+    measuredMinutes,
+    downtimeMinutes,
+    achievedBps,
+    e.availability_target_bps,
+    breached,
+    creditMinor > 0 ? creditMinor : null,
+    creditMinor > 0 ? input.monthlyFee.currency.toUpperCase() : null,
   ];
 
   // Só descumprimento com crédito de verdade interessa ao financeiro. Um mês
   // que ficou abaixo da meta por menos de um degrau de penalidade não deve
   // nada, e publicá-lo criaria trabalho sem dinheiro.
+  //
+  // Duas apurações simultâneas do mesmo mês: o índice único decide e o
+  // `ON CONFLICT DO NOTHING` faz a perdedora não inserir nada — e, por o evento
+  // sair do mesmo comando (`RETURNING` alimenta o outbox), também não publicar.
+  // Antes, a perdedora estourava no índice com um 500, depois de o batch ter
+  // gravado o evento em alguns caminhos.
   if (breached && creditMinor > 0) {
-    statements.push(
-      outboxInsert(env, {
+    await eventStatement(
+      db,
+      `ins AS (${insertSql} RETURNING id)`,
+      insertParams,
+      {
         aggregateType: 'sla_period',
         aggregateId: id,
         type: 'operations.sla.breached',
@@ -474,14 +509,14 @@ export async function reckonSla(
           credit: money(creditMinor, input.monthlyFee.currency),
           contractRef: e.contract_ref,
         },
-      }),
-    );
+      },
+      'ins',
+    ).run();
+  } else {
+    await db.prepare(insertSql).bind(...insertParams).run();
   }
 
-  await env.DB.batch(statements);
-  return toSlaDto(
-    (await env.DB.prepare('SELECT * FROM sla_periods WHERE id = ?').bind(id).first<SlaPeriodRow>())!,
-  );
+  return toSlaDto((await find())!);
 }
 
 /**
@@ -493,7 +528,7 @@ export async function reckonSla(
  * erro de contagem.
  */
 async function measure(
-  env: BaseBindings,
+  db: Database,
   tenantId: string,
   e: EnvironmentRow,
   month: string,
@@ -503,7 +538,7 @@ async function measure(
   end.setUTCMonth(end.getUTCMonth() + 1);
   const monthMinutes = Math.round((end.getTime() - start.getTime()) / 60_000);
 
-  const { results } = await env.DB.prepare(
+  const { results } = await db.prepare(
     `SELECT opened_at, resolved_at, paused_minutes
        FROM tickets
       WHERE tenant_id = ? AND environment_id = ? AND severity = 'sev1'
@@ -543,7 +578,7 @@ async function measure(
 
 function scheduledMinutesIn(e: EnvironmentRow, start: Date, end: Date): number {
   if (!e.next_window) return 0;
-  const w = JSON.parse(e.next_window) as MaintenanceWindow;
+  const w = e.next_window as MaintenanceWindow;
   const from = Math.max(new Date(w.startsAt).getTime(), start.getTime());
   const to = Math.min(new Date(w.endsAt).getTime(), end.getTime());
   return to > from ? Math.round((to - from) / 60_000) : 0;
@@ -559,7 +594,8 @@ export interface SlaPeriodRow {
   downtime_minutes: number;
   achieved_bps: number;
   target_bps: number;
-  breached: number;
+  breached: boolean;
+  /** bigint em menor unidade; a camada o devolve como número. */
   credit_minor: number | null;
   credit_currency: string | null;
   reckoned_at: string;
@@ -574,7 +610,7 @@ export function toSlaDto(r: SlaPeriodRow): SlaPeriod {
     downtimeMinutes: r.downtime_minutes,
     achievedBps: r.achieved_bps,
     targetBps: r.target_bps,
-    breached: r.breached === 1,
+    breached: r.breached,
     credit:
       r.credit_minor !== null && r.credit_currency
         ? money(r.credit_minor, r.credit_currency)
@@ -594,7 +630,7 @@ function responseMinutesFor(e: EnvironmentRow, severity: Severity): number {
 }
 
 /** O número do chamado é inteiro, não tem prefixo — MAX direto. */
-async function highestTicketNumber(db: D1Database, tenantId: string): Promise<number> {
+async function highestTicketNumber(db: Database, tenantId: string): Promise<number> {
   const row = await db
     .prepare('SELECT COALESCE(MAX(number), 0) AS last FROM tickets WHERE tenant_id = ?')
     .bind(tenantId)
@@ -603,21 +639,21 @@ async function highestTicketNumber(db: D1Database, tenantId: string): Promise<nu
 }
 
 async function mustFindTicket(
-  env: BaseBindings,
+  db: Database,
   tenantId: string,
   id: string,
 ): Promise<TicketRow> {
-  const t = await findTicketRow(env.DB, tenantId, id);
+  const t = await findTicketRow(db, tenantId, id);
   if (!t) throw HttpProblem.notFound(`Chamado ${id} não encontrado.`);
   return t;
 }
 
 async function mustFindEnvironment(
-  env: BaseBindings,
+  db: Database,
   tenantId: string,
   id: string,
 ): Promise<EnvironmentRow> {
-  const e = await findEnvironmentRow(env.DB, tenantId, id);
+  const e = await findEnvironmentRow(db, tenantId, id);
   if (!e) throw HttpProblem.notFound(`Ambiente ${id} não encontrado.`);
   return e;
 }
@@ -632,19 +668,49 @@ interface OutboxEvent {
   payload: Record<string, unknown>;
 }
 
-function outboxInsert(env: BaseBindings, event: OutboxEvent): D1PreparedStatement {
-  return env.DB.prepare(
-    `INSERT INTO outbox (id, aggregate_type, aggregate_id, type, payload,
-                         tenant_id, actor_id, correlation_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).bind(
-    crypto.randomUUID(),
-    event.aggregateType,
-    event.aggregateId,
-    event.type,
-    JSON.stringify(event.payload),
-    event.tenantId,
-    event.actorId,
-    event.correlationId,
-  );
+/**
+ * Grava o evento no outbox A PARTIR de CTEs de escrita, num único comando.
+ *
+ * `ctes` é o texto de um ou mais CTEs (`moved AS (UPDATE … RETURNING id)`); o
+ * INSERT do outbox lê de `source` (por padrão `moved`) e, portanto, só insere se
+ * a escrita condicional moveu alguma linha. É o que impede o evento fantasma:
+ * quem perde a corrida (`WHERE status = …` não casa) não deixa evento de algo
+ * que não aconteceu. Um comando é uma transação, então a mudança e o evento
+ * valem juntos ou não valem.
+ */
+function eventStatement(
+  db: Database,
+  ctes: string,
+  params: unknown[],
+  event: OutboxEvent,
+  source = 'moved',
+): DbStatement {
+  return db
+    .prepare(
+      `WITH ${ctes}
+       INSERT INTO outbox (id, aggregate_type, aggregate_id, type, payload,
+                           tenant_id, actor_id, correlation_id)
+       SELECT ?, ?, ?, ?, ?::jsonb, ?, ?, ? FROM ${source}`,
+    )
+    .bind(
+      ...params,
+      crypto.randomUUID(),
+      event.aggregateType,
+      event.aggregateId,
+      event.type,
+      JSON.stringify(event.payload),
+      event.tenantId,
+      event.actorId,
+      event.correlationId,
+    );
+}
+
+/** Atalho: um UPDATE condicional (`… RETURNING id`) seguido do seu evento. */
+function eventAfter(
+  db: Database,
+  updateSql: string,
+  params: unknown[],
+  event: OutboxEvent,
+): DbStatement {
+  return eventStatement(db, `moved AS (${updateSql})`, params, event);
 }
