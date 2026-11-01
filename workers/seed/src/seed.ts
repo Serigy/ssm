@@ -88,11 +88,11 @@ function financialSql(): string {
       name: 'Cooperativa Vale do São Francisco', total: 2_100_000, paid: 0, due: '2026-10-30' },
   ];
 
-  const lines: string[] = ['DELETE FROM invoice_lines;', 'DELETE FROM invoices;'];
+  const lines: string[] = ['DELETE FROM financial.outbox;', 'DELETE FROM financial.invoice_lines;', 'DELETE FROM financial.invoices;'];
   for (const inv of invoices) {
     const issue = inv.status === 'draft' ? 'NULL' : q('2026-08-01');
     lines.push(
-      `INSERT INTO invoices (id, tenant_id, number, status, counterparty_id, counterparty_name,
+      `INSERT INTO financial.invoices (id, tenant_id, number, status, counterparty_id, counterparty_name,
          issue_date, due_date, currency, subtotal_minor, tax_total_minor, total_minor,
          amount_paid_minor, created_by, updated_by)
        VALUES (${q(inv.id)}, ${q(TENANT)}, ${inv.number ? q(inv.number) : 'NULL'}, ${q(inv.status)},
@@ -100,7 +100,7 @@ function financialSql(): string {
          ${inv.total}, 0, ${inv.total}, ${inv.paid}, ${q(USERS.controller)}, ${q(USERS.controller)});`,
     );
     lines.push(
-      `INSERT INTO invoice_lines (id, invoice_id, position, description, quantity_milli,
+      `INSERT INTO financial.invoice_lines (id, invoice_id, position, description, quantity_milli,
          unit_price_minor, tax_rate_bps, line_total_minor)
        VALUES (${q(crypto.randomUUID())}, ${q(inv.id)}, 0,
          'Sustentação de ambiente — mensalidade', 1000, ${inv.total}, 0, ${inv.total});`,
@@ -346,7 +346,7 @@ if (target === 'identity' && (remote || envName !== 'dev')) {
 
 // Módulos já no Neon (ADR 0014). A semente só alcança o Neon de desenvolvimento,
 // com o papel do próprio módulo; hmg e prd não são alvo desta ferramenta.
-const NEON_MODULES = ['identity', 'hr', 'operations'];
+const NEON_MODULES = ['identity', 'hr', 'operations', 'financial'];
 if (NEON_MODULES.includes(target) && (remote || envName !== 'dev')) {
   console.error(`${target} está no Neon; a semente só grava no banco de desenvolvimento. Recusado.`);
   process.exit(1);

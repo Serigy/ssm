@@ -62,8 +62,8 @@ runtime inteiro. A ferramenta de semente confere a porta e recusa, mas a ordem
 
 ## Banco: D1 e Neon durante a transição
 
-O ADR 0014 troca o D1 pelo Neon, um módulo por vez. **identity, hr e operations já estão no Neon**;
-financial, legal e o gateway seguem no D1 (`env.DB`).
+O ADR 0014 troca o D1 pelo Neon, um módulo por vez. **identity, hr, operations e financial já estão no Neon**;
+legal e o gateway seguem no D1 (`env.DB`).
 
 - `workers/shared/src/database.ts` dá ao código o mesmo subconjunto do D1
   (`prepare/bind/first/all/run` e `batch`) sobre Postgres, via Hyperdrive. O

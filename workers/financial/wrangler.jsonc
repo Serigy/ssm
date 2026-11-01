@@ -32,12 +32,15 @@
     "REFRESH_TOKEN_TTL_SECONDS": "1209600",
     "CORS_ORIGINS": "http://localhost:4200"
   },
-  "d1_databases": [
+  // Banco: Neon, via Hyperdrive (ADR 0014). Em dev o wrangler não passa pelo
+  // Hyperdrive: conecta direto na URL de CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE,
+  // que scripts/cf-devvars.sh grava no .env (e não no .dev.vars: o wrangler lê do
+  // ambiente) a partir de secrets/local/neon_financial_url.
+  // O `id` abaixo só precisa ser um UUID bem formado em dev; não existe na conta.
+  "hyperdrive": [
     {
-      "binding": "DB",
-      "database_name": "ssm-financial-dev",
-      "database_id": "local-financial",
-      "migrations_dir": "../migrations/financial"
+      "binding": "HYPERDRIVE",
+      "id": "00000000000000000000000000000000"
     }
   ],
   "kv_namespaces": [
@@ -120,12 +123,15 @@
         "REFRESH_TOKEN_TTL_SECONDS": "1209600",
         "CORS_ORIGINS": "https://hmg-ssm.serigy.net"
       },
-      "d1_databases": [
+      // PENDENTE: o Hyperdrive de hmg ainda não existe. Criar com o papel
+      // ssm_financial (ver workers/migrations/postgres/README.md) e trocar o id.
+      // Enquanto o marcador estiver aqui, o deploy desse ambiente está impedido:
+      // o id não existe na conta e a API da Cloudflare o recusa. (O --dry-run
+      // do wrangler NÃO pega isso; só o deploy de verdade.)
+      "hyperdrive": [
         {
-          "binding": "DB",
-          "database_name": "ssm-financial-hmg",
-          "database_id": "20d82934-9a2c-41b7-aca6-0e53b5a565db",
-          "migrations_dir": "../migrations/financial"
+          "binding": "HYPERDRIVE",
+          "id": "PENDENTE-CRIAR-HYPERDRIVE-HMG"
         }
       ],
       "kv_namespaces": [
@@ -207,12 +213,15 @@
         "REFRESH_TOKEN_TTL_SECONDS": "1209600",
         "CORS_ORIGINS": "https://ssm.serigy.net"
       },
-      "d1_databases": [
+      // PENDENTE: o Hyperdrive de prd ainda não existe. Criar com o papel
+      // ssm_financial (ver workers/migrations/postgres/README.md) e trocar o id.
+      // Enquanto o marcador estiver aqui, o deploy desse ambiente está impedido:
+      // o id não existe na conta e a API da Cloudflare o recusa. (O --dry-run
+      // do wrangler NÃO pega isso; só o deploy de verdade.)
+      "hyperdrive": [
         {
-          "binding": "DB",
-          "database_name": "ssm-financial",
-          "database_id": "PLACEHOLDER",
-          "migrations_dir": "../migrations/financial"
+          "binding": "HYPERDRIVE",
+          "id": "PENDENTE-CRIAR-HYPERDRIVE-PRD"
         }
       ],
       "kv_namespaces": [

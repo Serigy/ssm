@@ -48,6 +48,16 @@ export interface Database {
   prepare(sql: string): DbStatement;
   /** Atômico: ou todas as instruções valem, ou nenhuma. */
   batch(statements: DbStatement[]): Promise<DbResult[]>;
+  /**
+   * Transação interativa: ler, decidir e escrever na mesma conexão, com
+   * COMMIT se `fn` retornar e ROLLBACK se lançar. O `tx` recebido é o banco a
+   * usar lá dentro (`SELECT … FOR UPDATE` funciona nele); um `batch()` de `tx`
+   * entra na mesma transação em vez de abrir outra.
+   *
+   * Transações e `batch()` do mesmo banco rodam uma de cada vez: a conexão é
+   * uma só, e duas transações nela se misturariam.
+   */
+  transaction<T>(fn: (tx: Database) => Promise<T>): Promise<T>;
 }
 
 /** Banco aberto para uma requisição. Precisa ser fechado ao fim dela. */
@@ -187,16 +197,25 @@ class PgStatement implements DbStatement {
 }
 
 class PgDatabase implements Database {
-  constructor(private readonly connect: () => Promise<PgConnection>) {}
+  /** Fila das transações e batches deste banco (uma conexão = uma de cada vez). */
+  private tail: Promise<unknown> = Promise.resolve();
+
+  /**
+   * `inTransaction`: este objeto é o `tx` de uma transação em curso. Nele o
+   * `batch` e o `transaction` entram na transação existente, sem BEGIN próprio —
+   * um BEGIN dentro de outro só emite aviso e o COMMIT interno confirmaria o de
+   * fora.
+   */
+  constructor(
+    private readonly connect: () => Promise<PgConnection>,
+    private readonly inTransaction = false,
+  ) {}
 
   prepare(sql: string): DbStatement {
     return new PgStatement(this, sql);
   }
 
-  async exec(
-    stmt: PgStatement,
-    conn?: PgConnection,
-  ): Promise<DbResult> {
+  async exec(stmt: PgStatement): Promise<DbResult> {
     const { text, count } = toPositional(stmt.sql);
     if (count !== stmt.params.length) {
       // Falhar aqui é melhor que o Postgres responder "bind message supplies N
@@ -205,9 +224,15 @@ class PgDatabase implements Database {
         `SQL espera ${count} parâmetro(s) e recebeu ${stmt.params.length}: ${stmt.sql.slice(0, 80)}`,
       );
     }
-    const c = conn ?? (await this.connect());
+    const c = await this.connect();
     const res = await c.query(text, stmt.params);
     return { results: res.rows, success: true, meta: { changes: res.rowCount ?? 0 } };
+  }
+
+  private serialize<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.tail.then(fn, fn);
+    this.tail = run.catch(() => undefined);
+    return run;
   }
 
   async batch(statements: DbStatement[]): Promise<DbResult[]> {
@@ -217,19 +242,36 @@ class PgDatabase implements Database {
       }
     }
     if (statements.length === 0) return [];
-
-    const conn = await this.connect();
-    const results: DbResult[] = [];
-    await conn.query('BEGIN');
-    try {
-      for (const s of statements) results.push(await this.exec(s as PgStatement, conn));
-      await conn.query('COMMIT');
-    } catch (err) {
-      // Se o ROLLBACK também falhar, a causa que importa é a primeira.
-      await conn.query('ROLLBACK').catch(() => undefined);
-      throw err;
+    if (this.inTransaction) {
+      const results: DbResult[] = [];
+      for (const s of statements) results.push(await this.exec(s as PgStatement));
+      return results;
     }
-    return results;
+    return this.transaction(async (tx) => {
+      const results: DbResult[] = [];
+      for (const s of statements as PgStatement[]) {
+        results.push(await (tx as PgDatabase).exec(new PgStatement(tx as PgDatabase, s.sql, s.params)));
+      }
+      return results;
+    });
+  }
+
+  transaction<T>(fn: (tx: Database) => Promise<T>): Promise<T> {
+    if (this.inTransaction) return fn(this);
+    return this.serialize(async () => {
+      const conn = await this.connect();
+      const tx = new PgDatabase(async () => conn, true);
+      await conn.query('BEGIN');
+      try {
+        const result = await fn(tx);
+        await conn.query('COMMIT');
+        return result;
+      } catch (err) {
+        // Se o ROLLBACK também falhar, a causa que importa é a primeira.
+        await conn.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      }
+    });
   }
 }
 

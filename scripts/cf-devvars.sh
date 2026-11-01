@@ -65,6 +65,7 @@ neon_env() {
 }
 neon_env identity
 emit financial  JWT_PUBLIC_KEY=jwt_public_key.pem
+neon_env financial
 # O jurídico assina URL de envio e leitura do PDF do contrato, e para isso
 # precisa das credenciais S3 do R2 — o binding R2 lê e escreve, mas não assina.
 emit legal      JWT_PUBLIC_KEY=jwt_public_key.pem \
