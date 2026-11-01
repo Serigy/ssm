@@ -6,6 +6,7 @@ import {
   Coordinator,
   type AppEnv,
   withMonitoring,
+  openFromBinding,
 } from '@ssm/worker-common';
 import type { Context } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
@@ -42,7 +43,8 @@ const LOGIN_WINDOW_SECONDS = 300;
 const LOGIN_MAX_FAILURES = 20;
 const LOGIN_MAX_ATTEMPTS = 300;
 
-const app = createApp('/api/identity');
+// Identidade já está no Neon (ADR 0014): `postgres` abre a conexão da requisição.
+const app = createApp('/api/identity', { postgres: true });
 
 app.post('/api/identity/v1/auth/login', async (c) => {
   const ip = c.req.header('cf-connecting-ip') ?? 'desconhecido';
@@ -69,7 +71,7 @@ app.post('/api/identity/v1/auth/login', async (c) => {
 
   let pair;
   try {
-    pair = await login(c.env, dto, {
+    pair = await login(c.env, c.get('db'), dto, {
       userAgent: c.req.header('user-agent'),
       ip: c.req.header('cf-connecting-ip'),
     });
@@ -96,7 +98,7 @@ app.post('/api/identity/v1/auth/refresh', async (c) => {
     throw HttpProblem.unauthorized('Sessão ausente. Entre novamente.');
   }
 
-  const pair = await refresh(c.env, token, {
+  const pair = await refresh(c.env, c.get('db'), token, {
     userAgent: c.req.header('user-agent'),
     ip: c.req.header('cf-connecting-ip'),
   });
@@ -106,14 +108,15 @@ app.post('/api/identity/v1/auth/refresh', async (c) => {
 
 app.post('/api/identity/v1/auth/logout', async (c) => {
   const token = getCookie(c, REFRESH_COOKIE);
-  if (token) await logout(c.env, token);
+  if (token) await logout(c.env, c.get('db'), token);
   deleteCookie(c, REFRESH_COOKIE, { path: COOKIE_PATH });
   return c.body(null, 204);
 });
 
-app.get('/api/identity/v1/auth/me', requireAuth(), async (c) =>
-  c.json(await session(c.env, c.get('actor').id)),
-);
+app.get('/api/identity/v1/auth/me', requireAuth(), async (c) => {
+  const actor = c.get('actor');
+  return c.json(await session(c.get('db'), actor.tenantId, actor.id));
+});
 
 /**
  * Grava o refresh token no cookie.
@@ -151,14 +154,17 @@ export default withMonitoring({
    *
    * O serviço em contêiner não tinha isto e a tabela crescia para sempre: um
    * refresh token expirado há um mês não serve para nada e continua ocupando
-   * linha e índice. No D1, onde o custo é por linha lida, isso vira dinheiro.
+   * linha e índice.
+   *
+   * Não passa pelo Hono, então abre e fecha a própria conexão. Varre todos os
+   * tenants de propósito: é manutenção da tabela, não consulta de negócio, e
+   * por isso o único SQL deste módulo sem `tenant_id`.
    */
   async scheduled(_c: ScheduledController, env: AppEnv['Bindings'], ctx: ExecutionContext) {
+    const db = openFromBinding(env.HYPERDRIVE);
     ctx.waitUntil(
-      env.DB.prepare(
-        `DELETE FROM refresh_tokens
-          WHERE expires_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-7 days')`,
-      )
+      db
+        .prepare(`DELETE FROM refresh_tokens WHERE expires_at < now() - interval '7 days'`)
         .run()
         .then((r) => {
           if (r.meta.changes) {
@@ -166,7 +172,8 @@ export default withMonitoring({
               JSON.stringify({ event: 'auth.refresh.swept', removed: r.meta.changes }),
             );
           }
-        }),
+        })
+        .finally(() => db.close()),
     );
   },
 } satisfies ExportedHandler<AppEnv['Bindings']>);

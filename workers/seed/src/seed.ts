@@ -1,12 +1,12 @@
 import { argon2id } from '@noble/hashes/argon2';
 import { computeAvailabilityBps, computeSlaCredit } from '@ssm/contracts';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Semeadura do D1.
+ * Semeadura do D1 — e, para o módulo identity, do Neon (ADR 0014).
  *
  * Gera SQL e o aplica com `wrangler d1 execute`. Gerar o arquivo em vez de
  * inserir direto tem duas razões: o mesmo SQL serve para local e para
@@ -66,9 +66,9 @@ function identitySql(): string {
 
   return [
     '-- Gerado por workers/seed. Não editar à mão.',
-    'DELETE FROM refresh_tokens;',
-    'DELETE FROM users;',
-    'INSERT INTO users (id, tenant_id, email, password_hash, display_name, status, roles) VALUES',
+    'DELETE FROM identity.refresh_tokens;',
+    'DELETE FROM identity.users;',
+    'INSERT INTO identity.users (id, tenant_id, email, password_hash, display_name, status, roles) VALUES',
     `${rows};`,
     `-- senha de todos: ${DEMO_PASSWORD} (hash ${hash.slice(0, 30)}…)`,
     '',
@@ -331,6 +331,13 @@ if (!build) {
   process.exit(1);
 }
 
+// A senha de demonstração é pública, no README. Num banco remoto ela vira acesso.
+// Conferido antes de qualquer outra coisa: nem o D1 nem o Neon de hmg/prd.
+if (target === 'identity' && (remote || envName !== 'dev')) {
+  console.error('A identidade não se semeia em ambiente remoto: a senha é pública. Recusado.');
+  process.exit(1);
+}
+
 /**
  * Semear com o Worker no ar mata o Worker.
  *
@@ -356,7 +363,9 @@ async function noAr(porta: number): Promise<boolean> {
   }
 }
 
-if (!remote && envName === 'dev' && (await noAr(PORTAS[target]!))) {
+// identity está no Neon: não há SQLite compartilhado para travar, então o Worker
+// pode ficar no ar durante a semeadura.
+if (target !== 'identity' && !remote && envName === 'dev' && (await noAr(PORTAS[target]!))) {
   console.error(
     `O Worker de ${target} está no ar na porta ${PORTAS[target]}.\n` +
       `Semear agora trava o SQLite e derruba o runtime. Pare antes:\n\n` +
@@ -372,6 +381,31 @@ mkdirSync(outDir, { recursive: true });
 const file = join(outDir, `${target}.sql`);
 writeFileSync(file, build());
 console.log(`SQL gerado em ${file.replace(root + '/', '')}`);
+
+if (target === 'identity') {
+  // Neon de desenvolvimento, com o papel do próprio módulo: a semente só
+  // alcança o que o Worker alcança. O arquivo é o mesmo que o Hyperdrive local
+  // lê (scripts/cf-devvars.sh) — a regra é segredo em arquivo. O caminho é fixo
+  // de propósito: não há variável que aponte a semente para outro banco.
+  const url = readFileSync(join(root, 'secrets/local/neon_identity_url'), 'utf8').trim();
+  const { default: pg } = await import('pg');
+  const client = new pg.Client({ connectionString: url });
+  try {
+    await client.connect();
+    await client.query('BEGIN');
+    await client.query(build());
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    // A mensagem do driver não leva a URL; ainda assim só ela é impressa.
+    console.error('Falha ao semear identity:', err instanceof Error ? err.message : 'erro desconhecido');
+    process.exit(1);
+  } finally {
+    await client.end().catch(() => undefined);
+  }
+  console.log('identity semeado no Neon de desenvolvimento.');
+  process.exit(0);
+}
 
 const database = envName === 'prd' ? `ssm-${target}` : `ssm-${target}-${envName}`;
 const args = ['wrangler', 'd1', 'execute', database, remote ? '--remote' : '--local', '--file', file];

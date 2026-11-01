@@ -8,9 +8,11 @@
   },
   "dependencies": {
     "@noble/hashes": "^1.8.0",
-    "@ssm/contracts": "workspace:*"
+    "@ssm/contracts": "workspace:*",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@types/pg": "^8.23.1",
     "tsx": "^4.19.3"
   }
 }
