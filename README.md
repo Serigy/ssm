@@ -84,8 +84,7 @@ Comece por [docs/README.md](docs/README.md). Para entender *por que* algo é com
 
 ## Segurança
 
-Aikido Zen roda como firewall em aplicação nos cinco serviços; a varredura da
-Aikido roda no CI e semanalmente. Ver [docs/security/](docs/security/) e o
+Aikido Zen roda como firewall em aplicação nos cinco serviços. Ver [docs/security/](docs/security/) e o
 [ADR 0009](docs/adr/0009-aikido-zen.md).
 
 Vulnerabilidade encontrada: abra um issue **privado** e marque a plataforma.

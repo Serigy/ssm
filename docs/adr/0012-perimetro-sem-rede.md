@@ -61,8 +61,8 @@ internet. Um Worker fala com qualquer host, porque `fetch()` é parte do runtime
 Um pacote comprometido na árvore de dependências consegue exfiltrar dado sem
 tocar em nenhuma regra. O que atenua:
 
-- O `pnpm-lock.yaml` é a fronteira, e o Aikido (ADR [0009](0009-aikido-zen.md))
-  vigia a árvore. Isso deixou de ser higiene e passou a ser controle primário.
+- O `pnpm-lock.yaml` é a fronteira, e o `pnpm audit` e o Trivy
+  vigiam a árvore. Isso deixou de ser higiene e passou a ser controle primário.
 - Nenhum código nosso faz `fetch()` com URL vinda de requisição. É verificável
   por revisão, e vale uma regra de lint.
 - Onde a Cloudflare oferece política de egresso por conta, ela deve ser ligada.

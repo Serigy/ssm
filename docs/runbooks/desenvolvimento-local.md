@@ -82,20 +82,6 @@ make affected    # só o que você mexeu — bem mais rápido
 make openapi     # se você mudou um endpoint; faça commit do diff
 ```
 
-## Aikido no agente de código
-
-O servidor MCP da Aikido já está declarado em `.mcp.json` (Claude Code) e em
-`.zed/settings.json` (Zed), com versão fixada. Ele varre o código salvo e lê os
-achados da Aikido de dentro do agente.
-
-Aprove o servidor quando o agente perguntar e peça o login: a ferramenta
-`aikido_login` devolve um link para entrar pelo navegador. Esse login é pessoal
-e não passa por nenhum arquivo do repositório.
-
-Não há token nesses arquivos, e nenhum deve entrar neles. O token de CI
-(`AIKIDO_SECRET_KEY`, `secrets/local/aikido_token`) é outra credencial e não
-serve aqui.
-
 ## Quando algo não sobe
 
 **Um serviço reinicia em laço.** `make logs S=financial-svc`. As causas mais

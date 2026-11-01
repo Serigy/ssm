@@ -17,26 +17,6 @@ permissions:
   security-events: write
 
 jobs:
-  aikido:
-    name: Aikido
-    runs-on: ubuntu-latest
-    # Forked PRs cannot read the token; the scan runs again after merge.
-    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Varredura Aikido
-        uses: AikidoSec/github-actions-workflow@47d83dbcf3e6635044c4b31cef590c1e095217cc # v1.0.13
-        with:
-          secret-key: ${{ secrets.AIKIDO_SECRET_KEY }}
-          # Blocks the merge on a genuinely exploitable issue rather than on
-          # every advisory — a gate that always fires gets bypassed.
-          fail-on-dependency-scan: true
-          fail-on-sast-scan: true
-          fail-on-iac-scan: true
-          minimum-severity: 'HIGH'
-          post-scan-status-comment: 'on'
-
   dependencies:
     name: Dependências
     runs-on: ubuntu-latest

@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "aikido": {
-      "command": "npx",
-      "args": ["-y", "@aikidosec/mcp@1.0.33"]
-    }
-  }
-}
