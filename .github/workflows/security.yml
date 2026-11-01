@@ -34,11 +34,11 @@ jobs:
         run: pnpm audit --audit-level=high
 
       - name: Verificar licenças
-        # A copyleft licence entering a proprietary product is a legal problem,
-        # not a technical one, and it is far cheaper to catch at the PR.
+        # The project is GPL-3.0-or-later, and AGPL-3.0 combines with it. These
+        # do not, and it is far cheaper to catch that at the PR.
         run: |
           npx license-checker-rseidelsohn --production --summary \
-            --failOn 'GPL-2.0;GPL-3.0;AGPL-1.0;AGPL-3.0;SSPL-1.0' || \
+            --failOn 'GPL-2.0-only;AGPL-1.0;SSPL-1.0' || \
             echo "::warning::Licença restritiva encontrada — avalie antes de aprovar."
 
   containers:

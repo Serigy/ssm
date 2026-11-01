@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "SSM \u2014 Serigy Service Manager. Financial, HR and Legal modules on a NestJS microservice backend with a Module-Federation micro-frontend.",
-  "license": "UNLICENSED",
+  "license": "GPL-3.0-or-later",
   "engines": {
     "node": ">=22.0.0",
     "pnpm": ">=9.0.0"

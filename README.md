@@ -87,4 +87,11 @@ Comece por [docs/README.md](docs/README.md). Para entender *por que* algo é com
 Aikido Zen roda como firewall em aplicação nos cinco serviços. Ver [docs/security/](docs/security/) e o
 [ADR 0009](docs/adr/0009-aikido-zen.md).
 
-Vulnerabilidade encontrada: abra um issue **privado** e marque a plataforma.
+Vulnerabilidade encontrada: relate pela aba **Security** do GitHub, e não em um
+issue público.
+
+## Licença
+
+[GPL-3.0-or-later](LICENSE). O firewall Zen é AGPL-3.0, então quem distribuir os
+serviços NestJS com ele segue também os termos dessa licença. O nome e a marca
+Serigy não fazem parte da licença do código.
