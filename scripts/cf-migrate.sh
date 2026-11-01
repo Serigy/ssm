@@ -11,7 +11,7 @@ cd "$ROOT"
 
 # identity, hr e outros já estão no Neon (ADR 0014): suas migrações são as de
 # workers/migrations/postgres/, aplicadas por apply.mjs, não pelo D1.
-MODULES=(financial legal)
+MODULES=(legal)
 
 # Credencial em arquivo, como no cf-provision.sh.
 if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] && [ -z "${CLOUDFLARE_API_KEY:-}" ] && [ "$ENV_NAME" != "dev" ]; then

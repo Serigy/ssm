@@ -9,7 +9,8 @@
     "deploy:prd": "../../scripts/cf-deploy-worker.sh prd",
     "tail:hmg": "wrangler tail --env hmg",
     "types": "wrangler types",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@ssm/contracts": "workspace:*",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250508.0",
+    "@electric-sql/pglite": "^0.5.14",
     "wrangler": "^4.14.0"
   }
 }

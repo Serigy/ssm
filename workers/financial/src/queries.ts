@@ -1,13 +1,9 @@
+import type { Database } from '@ssm/worker-common';
 import { money, type Invoice, type InvoiceFilter, type Page, type PageQuery } from '@ssm/contracts';
 
 /**
- * Consultas em SQL literal, sem ORM.
- *
- * O TypeORM não fala com D1, e o D1 não tem transação interativa — o padrão
- * `SELECT ... FOR UPDATE` seguido de escrita simplesmente não existe. Em vez de
- * trocar um ORM por outro, as consultas ficam explícitas: o que é executado é o
- * que está escrito, e o `batch()` atômico do D1 fica visível no lugar onde
- * importa.
+ * Consultas em SQL literal, sem ORM: o que é executado é o que está escrito, e
+ * a transação fica visível no lugar onde importa.
  */
 
 interface InvoiceRow {
@@ -17,9 +13,11 @@ interface InvoiceRow {
   status: string;
   counterparty_id: string;
   counterparty_name: string;
+  /** date: texto AAAA-MM-DD. */
   issue_date: string | null;
   due_date: string;
   currency: string;
+  /** bigint em menor unidade; a camada o devolve como número (lança acima de 2^53). */
   subtotal_minor: number;
   tax_total_minor: number;
   total_minor: number;
@@ -44,7 +42,7 @@ interface LineRow {
 }
 
 export async function listInvoices(
-  db: D1Database,
+  db: Database,
   tenantId: string,
   filter: InvoiceFilter,
   page: PageQuery,
@@ -71,10 +69,13 @@ export async function listInvoices(
     params.push(filter.dueAfter);
   }
   if (filter.q) {
-    // FTS5 no lugar do pg_trgm. Casa por termo, não por trecho dentro de
-    // palavra — a perda está registrada em workers/migrations/financial.
-    where.push('i.rowid IN (SELECT rowid FROM invoices_fts WHERE invoices_fts MATCH ?)');
-    params.push(`${filter.q.replace(/["\s]+/g, ' ').trim()}*`);
+    // tsvector no lugar do pg_trgm. Casa por termo (prefixo, sem acento), não
+    // por trecho dentro de palavra — a perda está registrada na migração.
+    const query = searchQuery(filter.q);
+    if (query) {
+      where.push(`i.search @@ to_tsquery('simple', ?)`);
+      params.push(query);
+    }
   }
 
   // Paginação por chave, como antes: OFFSET faz linha aparecer em duas páginas
@@ -124,13 +125,13 @@ export async function listInvoices(
 }
 
 export async function findInvoice(
-  db: D1Database,
+  db: Database,
   tenantId: string,
   id: string,
 ): Promise<Invoice | null> {
   const row = await db
-    .prepare('SELECT * FROM invoices WHERE id = ? AND tenant_id = ?')
-    .bind(id, tenantId)
+    .prepare('SELECT * FROM invoices WHERE tenant_id = ? AND id = ?')
+    .bind(tenantId, id)
     .first<InvoiceRow>();
   if (!row) return null;
 
@@ -172,6 +173,21 @@ function toDto(r: InvoiceRow, lines: LineRow[]): Invoice {
     updatedAt: r.updated_at,
     updatedBy: r.updated_by,
   };
+}
+
+/**
+ * Texto digitado -> tsquery de prefixo, na mesma dobra de acento da coluna
+ * `search`. Só letras e dígitos sobrevivem, então o valor não carrega operador
+ * de tsquery; ainda assim vai como parâmetro. null quando não sobra termo.
+ */
+export function searchQuery(input: string): string | null {
+  const terms = input
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  return terms.length ? terms.map((t) => `${t}:*`).join(' & ') : null;
 }
 
 function encodeCursor(createdAt: string, id: string): string {

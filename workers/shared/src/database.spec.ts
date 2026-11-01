@@ -204,6 +204,62 @@ describe('Database sobre Postgres', () => {
     expect((await db.prepare('SELECT * FROM t').all()).results).toHaveLength(1);
   });
 
+  test('transaction(): COMMIT quando a função retorna, com leitura e escrita na mesma conexão', async () => {
+    const out = await db.transaction(async (tx) => {
+      await tx.prepare('INSERT INTO t (id, n) VALUES (?, ?)').bind('a', 1).run();
+      const seen = await tx.prepare('SELECT n FROM t WHERE id = ?').bind('a').first<{ n: number }>();
+      await tx.prepare('UPDATE t SET n = ? WHERE id = ?').bind(seen!.n + 1, 'a').run();
+      return seen!.n;
+    });
+    expect(out).toBe(1);
+    expect((await db.prepare('SELECT n FROM t').first<{ n: number }>())?.n).toBe(2);
+    expect(log.filter((l) => l === 'BEGIN')).toHaveLength(1);
+    expect(log).toContain('COMMIT');
+  });
+
+  test('transaction(): se a função lança, nada do que ela escreveu fica', async () => {
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.prepare('INSERT INTO t (id, n) VALUES (?, ?)').bind('a', 1).run();
+        throw new Error('falhou no meio');
+      }),
+    ).rejects.toThrow('falhou no meio');
+    expect((await db.prepare('SELECT * FROM t').all()).results).toHaveLength(0);
+    expect(log).toContain('ROLLBACK');
+    expect(log).not.toContain('COMMIT');
+  });
+
+  test('transaction(): batch() de dentro entra na mesma transação, sem BEGIN próprio', async () => {
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.batch([tx.prepare('INSERT INTO t (id, n) VALUES (?, ?)').bind('a', 1)]);
+        throw new Error('depois do batch');
+      }),
+    ).rejects.toThrow();
+    // O batch interno não confirmou nada: a transação de fora desfez tudo.
+    expect((await db.prepare('SELECT * FROM t').all()).results).toHaveLength(0);
+    expect(log.filter((l) => l === 'BEGIN')).toHaveLength(1);
+  });
+
+  test('transaction(): duas simultâneas no mesmo banco rodam uma de cada vez', async () => {
+    const order: string[] = [];
+    const work = (name: string) =>
+      db.transaction(async (tx) => {
+        order.push(`${name}:início`);
+        await tx.prepare('INSERT INTO t (id, n) VALUES (?, ?)').bind(name, 1).run();
+        await new Promise((r) => setTimeout(r, 20));
+        order.push(`${name}:fim`);
+      });
+    await Promise.all([work('x'), work('y')]);
+    expect(order).toEqual(['x:início', 'x:fim', 'y:início', 'y:fim']);
+    expect((await db.prepare('SELECT * FROM t').all()).results).toHaveLength(2);
+  });
+
+  test('transaction(): uma que falhou não impede a seguinte', async () => {
+    await db.transaction(async () => { throw new Error('x'); }).catch(() => undefined);
+    await expect(db.transaction(async (tx) => tx.prepare('SELECT 1 AS um').first())).resolves.toEqual({ um: 1 });
+  });
+
   test('número de parâmetros diferente do de ? é erro antes de ir ao servidor', async () => {
     await expect(db.prepare('SELECT ?, ?').bind(1).first()).rejects.toThrow(/espera 2/);
     expect(log).toHaveLength(0);

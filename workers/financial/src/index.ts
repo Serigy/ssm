@@ -9,6 +9,8 @@ import {
   type AppEnv,
   captureUnexpected,
   withMonitoring,
+  openFromBinding,
+  type Database,
 } from '@ssm/worker-common';
 import { z } from 'zod';
 import {
@@ -30,7 +32,8 @@ import {
   voidInvoice,
 } from './commands.js';
 
-const app = createApp('/api/financial');
+// Financeiro já está no Neon (ADR 0014): `postgres` abre a conexão da requisição.
+const app = createApp('/api/financial', { postgres: true });
 
 app.get(
   '/api/financial/v1/invoices',
@@ -41,7 +44,7 @@ app.get(
       invoiceFilterSchema.merge(pageQuerySchema),
       Object.fromEntries(new URL(c.req.url).searchParams),
     );
-    const page: Page<Invoice> = await listInvoices(c.env.DB, c.get('actor').tenantId, filter, {
+    const page: Page<Invoice> = await listInvoices(c.get('db'), c.get('actor').tenantId, filter, {
       limit,
       cursor,
       sort,
@@ -55,7 +58,7 @@ app.get(
   requireAuth(),
   requirePermissions('financial:invoice:read'),
   async (c) => {
-    const invoice = await findInvoice(c.env.DB, c.get('actor').tenantId, c.req.param('id'));
+    const invoice = await findInvoice(c.get('db'), c.get('actor').tenantId, c.req.param('id'));
     // Mesmo 404 para "não existe" e "é de outro cliente": um 403 confirmaria
     // que o id é real a quem não deveria saber.
     if (!invoice) throw HttpProblem.notFound(`Fatura ${c.req.param('id')} não encontrada.`);
@@ -76,7 +79,7 @@ app.post(
   async (c) => {
     const dto = parse(createInvoiceSchema, await c.req.json().catch(() => null));
     const actor = c.get('actor');
-    const invoice = await createInvoice(c.env, actor.tenantId, actor.id, dto);
+    const invoice = await createInvoice(c.get('db'), actor.tenantId, actor.id, dto);
     c.header('Location', `/api/financial/v1/invoices/${invoice.id}`);
     return c.json(invoice, 201);
   },
@@ -90,7 +93,7 @@ app.post(
   async (c) => {
     const actor = c.get('actor');
     return c.json(
-      await issueInvoice(c.env, actor.tenantId, actor.id, c.req.param('id'), c.get('traceId')),
+      await issueInvoice(c.env, c.get('db'), actor.tenantId, actor.id, c.req.param('id'), c.get('traceId')),
     );
   },
 );
@@ -105,7 +108,7 @@ app.post(
     const actor = c.get('actor');
     return c.json(
       await recordPayment(
-        c.env,
+        c.get('db'),
         actor.tenantId,
         actor.id,
         c.req.param('id'),
@@ -123,7 +126,7 @@ app.patch(
   async (c) => {
     const dto = parse(updateInvoiceSchema, await c.req.json().catch(() => null));
     const actor = c.get('actor');
-    return c.json(await updateInvoice(c.env, actor.tenantId, actor.id, c.req.param('id'), dto));
+    return c.json(await updateInvoice(c.get('db'), actor.tenantId, actor.id, c.req.param('id'), dto));
   },
 );
 
@@ -140,7 +143,7 @@ app.post(
     const actor = c.get('actor');
     return c.json(
       await voidInvoice(
-        c.env,
+        c.get('db'),
         actor.tenantId,
         actor.id,
         c.req.param('id'),
@@ -156,7 +159,7 @@ app.delete(
   requireAuth(),
   requirePermissions('financial:invoice:delete'),
   async (c) => {
-    await deleteDraft(c.env, c.get('actor').tenantId, c.req.param('id'));
+    await deleteDraft(c.get('db'), c.get('actor').tenantId, c.req.param('id'));
     return c.body(null, 204);
   },
 );
@@ -182,7 +185,7 @@ app.get(
       throw HttpProblem.unauthorized('Esta sessão foi revogada. Entre novamente.');
     }
 
-    const invoice = await findInvoice(c.env.DB, actor.tenantId, c.req.param('id'));
+    const invoice = await findInvoice(c.get('db'), actor.tenantId, c.req.param('id'));
     if (!invoice) throw HttpProblem.notFound(`Fatura ${c.req.param('id')} não encontrada.`);
     if (!invoice.documentKey) {
       throw HttpProblem.notFound('Esta fatura ainda não tem documento gerado.');
@@ -210,7 +213,7 @@ function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.infer<S> {
   return result.data;
 }
 
-interface QueueEvent {
+export interface QueueEvent {
   id: string;
   type: string;
   data: Record<string, unknown>;
@@ -232,22 +235,29 @@ export default withMonitoring({
    * falhar sempre que o RH estivesse fora.
    */
   async queue(batch: MessageBatch<QueueEvent>, env: AppEnv['Bindings']) {
-    for (const message of batch.messages) {
-      try {
-        await handleEvent(env, message.body);
-        message.ack();
-      } catch (err) {
-        console.error(
-          JSON.stringify({
-            event: 'financial.queue.failed',
-            id: message.body?.id,
-            type: message.body?.type,
-            err: String(err),
-          }),
-        );
-        captureUnexpected(err, message.body?.correlationId ?? message.id);
-        message.retry();
+    // Uma conexão para o lote inteiro, fechada ao fim — o consumidor não passa
+    // pelo Hono, então ninguém mais a fecharia.
+    const db = openFromBinding(env.HYPERDRIVE);
+    try {
+      for (const message of batch.messages) {
+        try {
+          await handleEvent(db, message.body);
+          message.ack();
+        } catch (err) {
+          console.error(
+            JSON.stringify({
+              event: 'financial.queue.failed',
+              id: message.body?.id,
+              type: message.body?.type,
+              err: String(err),
+            }),
+          );
+          captureUnexpected(err, message.body?.correlationId ?? message.id);
+          message.retry();
+        }
       }
+    } finally {
+      await db.close();
     }
   },
 
@@ -261,25 +271,44 @@ export default withMonitoring({
    * saber de um desligamento um minuto depois não muda nada para ninguém.
    */
   async scheduled(_controller: ScheduledController, env: AppEnv['Bindings'], ctx: ExecutionContext) {
-    ctx.waitUntil(drainOutbox(env));
+    const db = openFromBinding(env.HYPERDRIVE);
+    ctx.waitUntil(drainOutbox(env, db).finally(() => db.close()));
   },
 } satisfies ExportedHandler<AppEnv['Bindings'], QueueEvent>);
 
 /**
  * O consumo é idempotente porque a entrega é ao-menos-uma-vez.
  *
- * A trava é o `INSERT OR IGNORE` em processed_events: quem consegue inserir
- * processa, quem não consegue já foi processado. Sem isso, um lote reentregue
- * lançaria o mesmo crédito de SLA duas vezes.
+ * A marca em processed_events e o EFEITO do evento são a mesma transação. A
+ * trava é a chave primária (`ON CONFLICT DO NOTHING`): quem consegue inserir
+ * processa, quem não consegue já foi processado. E se o efeito lança, a marca
+ * é desfeita junto — a reentrega (`message.retry()`) processa de novo, em vez
+ * de encontrar o evento "já processado" e perder o efeito para sempre. Marcar
+ * antes e executar depois, como era no D1, tinha exatamente esse buraco.
+ *
+ * Devolve 'duplicate' quando o evento já tinha sido aplicado.
  */
-async function handleEvent(env: AppEnv['Bindings'], event: QueueEvent): Promise<void> {
-  const fresh = await env.DB.prepare(
-    'INSERT OR IGNORE INTO processed_events (event_id, type, processed_at) VALUES (?, ?, ?)',
-  )
-    .bind(event.id, event.type, new Date().toISOString())
-    .run();
-  if (fresh.meta.changes === 0) return;
+export async function handleEvent(
+  db: Database,
+  event: QueueEvent,
+  effect: (tx: Database, event: QueueEvent) => Promise<void> = applyEffect,
+): Promise<'processed' | 'duplicate'> {
+  return db.transaction(async (tx) => {
+    const fresh = await tx
+      .prepare(
+        `INSERT INTO processed_events (event_id, type, processed_at) VALUES (?, ?, ?)
+         ON CONFLICT (event_id) DO NOTHING`,
+      )
+      .bind(event.id, event.type, new Date().toISOString())
+      .run();
+    if (fresh.meta.changes === 0) return 'duplicate';
 
+    await effect(tx, event);
+    return 'processed';
+  });
+}
+
+async function applyEffect(_tx: Database, event: QueueEvent): Promise<void> {
   const d = event.data;
   switch (event.type) {
     case 'hr.employee.offboarded':
@@ -330,7 +359,8 @@ async function handleEvent(env: AppEnv['Bindings'], event: QueueEvent): Promise<
         }),
       );
       // TODO(financial): emitir nota de crédito e abatê-la da próxima fatura.
-      // Depende das notas de crédito, ainda pendentes.
+      // Depende das notas de crédito, ainda pendentes. Quando existir, a escrita
+      // usa o `tx` recebido: o efeito e a marca de processado valem juntos.
       break;
     }
 
@@ -341,21 +371,24 @@ async function handleEvent(env: AppEnv['Bindings'], event: QueueEvent): Promise<
   }
 }
 
-async function drainOutbox(env: AppEnv['Bindings']): Promise<void> {
-  const { results } = await env.DB.prepare(
-    `SELECT id, type, payload, tenant_id, actor_id, correlation_id
-       FROM outbox
-      WHERE published_at IS NULL AND attempts < 5
-      ORDER BY created_at
-      LIMIT 50`,
-  ).all<{
-    id: string;
-    type: string;
-    payload: string;
-    tenant_id: string;
-    actor_id: string | null;
-    correlation_id: string;
-  }>();
+export async function drainOutbox(env: AppEnv['Bindings'], db: Database): Promise<void> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, type, payload, tenant_id, actor_id, correlation_id
+         FROM outbox
+        WHERE published_at IS NULL AND attempts < 5
+        ORDER BY created_at
+        LIMIT 50`,
+    )
+    .all<{
+      id: string;
+      type: string;
+      /** jsonb: o driver já devolve o objeto. */
+      payload: unknown;
+      tenant_id: string;
+      actor_id: string | null;
+      correlation_id: string;
+    }>();
 
   for (const row of results) {
     try {
@@ -364,7 +397,7 @@ async function drainOutbox(env: AppEnv['Bindings']): Promise<void> {
       await env.QUEUE_LEGAL.send({
         id: row.id,
         type: row.type,
-        data: JSON.parse(row.payload),
+        data: row.payload,
         tenantId: row.tenant_id,
         actorId: row.actor_id,
         correlationId: row.correlation_id,
@@ -372,15 +405,10 @@ async function drainOutbox(env: AppEnv['Bindings']): Promise<void> {
         source: 'financial-worker',
         version: 1,
       });
-      await env.DB.prepare(
-        `UPDATE outbox SET published_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
-      )
-        .bind(row.id)
-        .run();
+      await db.prepare('UPDATE outbox SET published_at = now() WHERE id = ?').bind(row.id).run();
     } catch (err) {
-      await env.DB.prepare(
-        `UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?`,
-      )
+      await db
+        .prepare('UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?')
         .bind(String(err).slice(0, 500), row.id)
         .run();
     }
