@@ -30,14 +30,14 @@ export function setupOpenApi(
     .setTitle(opts.title)
     .setDescription(opts.description)
     .setVersion(opts.version ?? '0.1.0')
-    .setContact('Serigy Platform', 'https://ssm.serigy.io', 'platform@serigy.io')
+    .setContact('Serigy Platform', 'https://ssm.serigy.net', 'platform@serigy.net')
     .addBearerAuth(
       { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', in: 'header' },
       'bearer',
     )
     .addServer('http://localhost:3000', 'Local gateway')
     .addServer('https://ssm.local', 'kind cluster')
-    .addServer('https://api.ssm.serigy.io', 'Production');
+    .addServer('https://api.ssm.serigy.net', 'Production');
 
   for (const t of opts.tags ?? []) builder.addTag(t.name, t.description);
 

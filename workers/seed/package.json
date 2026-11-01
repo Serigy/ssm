@@ -1,0 +1,16 @@
+{
+  "name": "@ssm/worker-seed",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed": "tsx src/seed.ts"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.8.0",
+    "@ssm/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.3"
+  }
+}

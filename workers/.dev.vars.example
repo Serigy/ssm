@@ -1,0 +1,13 @@
+# Segredos do ambiente local. Copie para .dev.vars em cada worker — o arquivo
+# é ignorado pelo git, e o Wrangler o carrega automaticamente em `wrangler dev`.
+#
+# Gere o par de chaves com o script que já existe:
+#   ./scripts/gen-secrets.sh
+#   cat secrets/local/jwt_public_key.pem
+#
+# Em hmg e prd nada disso é usado: lá os valores vêm do 1Password via
+# ./scripts/cf-secrets.sh e ficam cifrados na conta Cloudflare.
+
+JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+PII_ENCRYPTION_KEY="base64-de-32-bytes"

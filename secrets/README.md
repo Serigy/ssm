@@ -88,6 +88,29 @@ Resolution order for a secret named `foo`:
 Production **never** uses files that live in this repository. See
 [docs/security/secrets-management.md](../docs/security/secrets-management.md).
 
+### `op_service_account_token`
+
+O token da conta de serviço do 1Password, lido por
+[`scripts/cf-secrets.sh`](../scripts/cf-secrets.sh) para levar os segredos ao
+Cloudflare. É o único segredo que precisa existir antes de todos os outros —
+ele é a chave que abre o cofre de onde os demais saem.
+
+```bash
+install -m 600 /dev/null secrets/local/op_service_account_token
+printf '%s' 'ops_...' > secrets/local/op_service_account_token
+```
+
+`printf` em vez de `echo` porque `echo` acrescenta uma quebra de linha que o
+`op` rejeita, e sem aspas o histórico do shell guardaria o token. O script
+recusa o arquivo se a permissão não for 600 ou 400.
+
+A tentação é exportar `OP_SERVICE_ACCOUNT_TOKEN` no `~/.bashrc`. Não funciona e
+não deveria: o `.bashrc` padrão do Debian retorna antes, em shell não
+interativo, então nada automatizado enxerga a variável — e uma credencial
+exportada no perfil fica no ambiente de todo processo da máquina, que é
+exatamente o que este diretório existe para evitar. O script exporta a variável
+só no ambiente do `op`, pela duração da chamada.
+
 ## Rules
 
 1. Never commit anything under `secrets/` other than `example/` and these docs.
@@ -95,3 +118,5 @@ Production **never** uses files that live in this repository. See
    the logger redacts anything that matches a known secret.
 3. Never pass a secret as a container `ENV` or a `docker run -e` flag.
 4. Rotate by writing a new file — do not edit in place while services run.
+5. Um segredo que passou por chat, log, histórico de shell ou captura de tela
+   está exposto: rotacione, não avalie o risco caso a caso.

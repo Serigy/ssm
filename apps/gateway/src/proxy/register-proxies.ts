@@ -55,7 +55,7 @@ export function registerProxies(app: INestApplication): void {
             res.writeHead(502, { 'Content-Type': 'application/problem+json' });
             res.end(
               JSON.stringify({
-                type: 'https://ssm.serigy.io/problems/upstream-unavailable',
+                type: 'https://ssm.serigy.net/problems/upstream-unavailable',
                 title: 'Serviço indisponível',
                 status: 502,
                 detail:

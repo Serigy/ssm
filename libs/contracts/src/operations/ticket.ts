@@ -94,6 +94,9 @@ export const transitionTicketSchema = z.object({
 });
 export type TransitionTicket = z.infer<typeof transitionTicketSchema>;
 
+export const assignTicketSchema = z.object({ assigneeId: uuidSchema.nullable() });
+export type AssignTicket = z.infer<typeof assignTicketSchema>;
+
 export const ticketFilterSchema = z.object({
   status: ticketStatusSchema.optional(),
   severity: severitySchema.optional(),

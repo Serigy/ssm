@@ -89,7 +89,10 @@ por que um WAF de borda não substitui isso.
 
 ### Força bruta de credencial
 
-**Controles:** Argon2id (64 MiB, 3 passes) torna cada tentativa cara; bloqueio
+**Controles:** Argon2id (19 MiB, 2 passes, p=1 — mínimo OWASP; ver workers/README.md
+para a medição que levou a baixar de 64 MiB no Cloudflare) torna cada tentativa
+cara; um limite de 20 tentativas por origem em 5 minutos vem antes do hash, para
+que uma lista de senhas não vire conta de CPU; bloqueio
 após 5 falhas por 15 minutos; rate limit no gateway; e o hash é calculado mesmo
 quando o e-mail não existe, para que o tempo de resposta não revele quais
 endereços estão cadastrados.

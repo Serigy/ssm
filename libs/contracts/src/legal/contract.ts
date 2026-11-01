@@ -140,6 +140,32 @@ export const contractFilterSchema = z.object({
 });
 export type ContractFilter = z.infer<typeof contractFilterSchema>;
 
+/**
+ * Corpos das rotas de comando.
+ *
+ * Estavam em apps/legal-svc/src/contracts/contracts.dto.ts, onde só o serviço
+ * em NestJS os enxergava. Com o Worker consumindo os mesmos endpoints, manter
+ * a definição lá significaria escrever a mesma forma duas vezes — que é
+ * exatamente o que esta biblioteca existe para impedir.
+ */
+export const amendContractSchema = z.object({
+  clauses: z.array(clauseSchema),
+  note: z.string().max(1000).optional(),
+});
+export type AmendContract = z.infer<typeof amendContractSchema>;
+
+export const contractTransitionSchema = z.object({ status: contractStatusSchema });
+export type ContractTransition = z.infer<typeof contractTransitionSchema>;
+
+export const uploadRequestSchema = z.object({
+  filename: z.string().min(1).max(200),
+  contentType: z.string().min(3).max(100),
+});
+export type UploadRequest = z.infer<typeof uploadRequestSchema>;
+
+export const attachDocumentSchema = z.object({ key: z.string().min(1).max(500) });
+export type AttachDocument = z.infer<typeof attachDocumentSchema>;
+
 /** Presigned upload/download ticket issued by legal-svc for R2. */
 export const documentTicketSchema = z.object({
   url: z.string().url(),

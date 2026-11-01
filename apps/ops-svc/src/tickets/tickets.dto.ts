@@ -1,5 +1,6 @@
 import { createZodDto } from 'nestjs-zod';
 import {
+  assignTicketSchema,
   createTicketSchema,
   pageQuerySchema,
   pageSchema,
@@ -17,5 +18,5 @@ export class TicketPageDto extends createZodDto(pageSchema(ticketSchema)) {}
 export const listTicketsQuerySchema = ticketFilterSchema.merge(pageQuerySchema);
 export class ListTicketsQueryDto extends createZodDto(listTicketsQuerySchema) {}
 
-export const assignSchema = z.object({ assigneeId: z.string().uuid().nullable() });
+export const assignSchema = assignTicketSchema;
 export class AssignTicketDto extends createZodDto(assignSchema) {}

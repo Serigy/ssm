@@ -39,6 +39,12 @@ placeholder() {
 
 rand() { openssl rand -base64 "${1:-32}" | tr -d '\n=+/' | cut -c1-"${2:-32}"; }
 
+# Chave binária, e não senha: sai como base64 canônico de exatamente N bytes.
+# `rand` acima serve para senha — ele descarta caracteres do alfabeto base64
+# para o valor ser fácil de copiar, e por isso o resultado não decodifica para
+# um número redondo de bytes. Uma chave de AES precisa do tamanho exato.
+key() { openssl rand -base64 "${1:-32}"; }
+
 echo "Generating development secrets in $DEST"
 echo
 
@@ -47,9 +53,12 @@ write mongo_password     "$(rand 32 32)"
 write rabbitmq_password  "$(rand 32 32)"
 write session_secret     "$(rand 48 44)"
 write redis_password     "$(rand 32 32)"
-# Used by pgcrypto to encrypt the national id column in hr-svc. Rotating it
-# requires re-encrypting that column — see docs/runbooks/rotate-secrets.md.
-write pii_encryption_key "$(rand 48 44)"
+# Chave AES-GCM da coluna de CPF, agora cifrada no Worker de pessoas e não mais
+# pelo pgcrypto. Exatamente 32 bytes, porque SubtleCrypto.importKey recusa
+# qualquer outro tamanho — o valor anterior era senha de pgcrypto e decodificava
+# para 33 bytes, que o Worker rejeita ao subir. Rotacionar exige recifrar a
+# coluna — ver docs/runbooks/rotate-secrets.md.
+write pii_encryption_key "$(key 32)"
 # MinIO stands in for R2 locally, so the same S3 code path is exercised.
 write minio_password     "$(rand 32 32)"
 

@@ -2,16 +2,18 @@ packages:
   - 'apps/*'
   - 'libs/*'
   - 'tools/*'
+  - 'workers/*'
 
 # pnpm blocks postinstall scripts by default — a malicious package's install
 # script is one of the cheapest supply-chain attacks there is. Each entry below
 # is an explicit decision; anything not listed stays blocked.
 allowBuilds:
-  argon2: true               # native Argon2id binding — password hashing needs it
-  esbuild: true              # fetches its platform binary
-  nx: true                   # native task-runner binaries
+  argon2: true # native Argon2id binding — password hashing needs it
+  esbuild: true # fetches its platform binary
+  nx: true # native task-runner binaries
   '@aikidosec/firewall': true # native instrumentation hooks
-  '@scarf/scarf': false      # analytics telemetry only — no reason to run it
+  '@scarf/scarf': false # analytics telemetry only — no reason to run it
+  workerd: true              # runtime do Cloudflare Workers; baixa o binário
 
 # Settings live here rather than in .npmrc: pnpm 11 reads them from the
 # workspace manifest, and npm emits "Unknown project config" warnings on every

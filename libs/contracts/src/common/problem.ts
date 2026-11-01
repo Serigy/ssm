@@ -18,12 +18,12 @@ export const problemSchema = z.object({
 export type Problem = z.infer<typeof problemSchema>;
 
 export const PROBLEM_TYPES = {
-  validation: 'https://ssm.serigy.io/problems/validation-failed',
-  notFound: 'https://ssm.serigy.io/problems/not-found',
-  conflict: 'https://ssm.serigy.io/problems/conflict',
-  forbidden: 'https://ssm.serigy.io/problems/forbidden',
-  unauthenticated: 'https://ssm.serigy.io/problems/unauthenticated',
-  rateLimited: 'https://ssm.serigy.io/problems/rate-limited',
-  upstream: 'https://ssm.serigy.io/problems/upstream-unavailable',
-  internal: 'https://ssm.serigy.io/problems/internal-error',
+  validation: 'https://ssm.serigy.net/problems/validation-failed',
+  notFound: 'https://ssm.serigy.net/problems/not-found',
+  conflict: 'https://ssm.serigy.net/problems/conflict',
+  forbidden: 'https://ssm.serigy.net/problems/forbidden',
+  unauthenticated: 'https://ssm.serigy.net/problems/unauthenticated',
+  rateLimited: 'https://ssm.serigy.net/problems/rate-limited',
+  upstream: 'https://ssm.serigy.net/problems/upstream-unavailable',
+  internal: 'https://ssm.serigy.net/problems/internal-error',
 } as const;

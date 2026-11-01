@@ -1,0 +1,289 @@
+// ssm-legal · Cloudflare Worker
+//
+// Três ambientes: o padrão é `dev` e roda inteiro no Miniflare, sem tocar a
+// conta. `hmg` e `prd` são reais, com bancos, filas e namespaces separados —
+// os ids são preenchidos por scripts/cf-provision.sh.
+//
+//   pnpm --filter @ssm/worker-legal dev
+//   pnpm --filter @ssm/worker-legal deploy:hmg
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ssm-legal-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "dev": {
+    "port": 8804,
+    "local_protocol": "http"
+  },
+  "vars": {
+    "ENVIRONMENT": "dev",
+    "R2_BUCKET_NAME": "ssm-documents-dev",
+    "R2_ACCOUNT_ID": "86dd3c836ae52e572ce13a51e3d63390",
+    "SERVICE_NAME": "legal-worker",
+    "JWT_ISSUER": "http://localhost:8801",
+    "JWT_AUDIENCE": "ssm",
+    "ACCESS_TOKEN_TTL_SECONDS": "900",
+    "REFRESH_TOKEN_TTL_SECONDS": "1209600",
+    "CORS_ORIGINS": "http://localhost:4200"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ssm-legal-dev",
+      "database_id": "local-legal",
+      "migrations_dir": "../migrations/legal"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "local-shared"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "R2",
+      "bucket_name": "ssm-documents-dev"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "COORDINATOR",
+        "class_name": "Coordinator"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "Coordinator"
+      ]
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "QUEUE_IDENTITY",
+        "queue": "ssm-identity-dev"
+      },
+      {
+        "binding": "QUEUE_FINANCIAL",
+        "queue": "ssm-financial-dev"
+      },
+      {
+        "binding": "QUEUE_HR",
+        "queue": "ssm-hr-dev"
+      },
+      {
+        "binding": "QUEUE_LEGAL",
+        "queue": "ssm-legal-dev"
+      },
+      {
+        "binding": "QUEUE_OPERATIONS",
+        "queue": "ssm-operations-dev"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "ssm-legal-dev",
+        "max_batch_size": 25,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "ssm-dlq-dev"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": [
+      "*/1 * * * *",
+      "0 * * * *"
+    ]
+  },
+  "env": {
+    "hmg": {
+      "name": "ssm-legal-hmg",
+      "vars": {
+        "ENVIRONMENT": "hmg",
+        "R2_BUCKET_NAME": "ssm-documents-hmg",
+        "R2_ACCOUNT_ID": "86dd3c836ae52e572ce13a51e3d63390",
+        "SERVICE_NAME": "legal-worker",
+        "JWT_ISSUER": "https://hmg-ssm.serigy.net",
+        "JWT_AUDIENCE": "ssm",
+        "ACCESS_TOKEN_TTL_SECONDS": "900",
+        "REFRESH_TOKEN_TTL_SECONDS": "1209600",
+        "CORS_ORIGINS": "https://hmg-ssm.serigy.net"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "ssm-legal-hmg",
+          "database_id": "96d1c90e-169e-4a68-9db6-8afe6100afc1",
+          "migrations_dir": "../migrations/legal"
+        }
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "KV",
+          "id": "bf95ed276201405d89bc84f0bf00c80c"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "R2",
+          "bucket_name": "ssm-documents-hmg"
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "COORDINATOR",
+            "class_name": "Coordinator",
+            "script_name": "ssm-gateway-hmg"
+          }
+        ]
+      },
+      "queues": {
+        "producers": [
+          {
+            "binding": "QUEUE_IDENTITY",
+            "queue": "ssm-identity-hmg"
+          },
+          {
+            "binding": "QUEUE_FINANCIAL",
+            "queue": "ssm-financial-hmg"
+          },
+          {
+            "binding": "QUEUE_HR",
+            "queue": "ssm-hr-hmg"
+          },
+          {
+            "binding": "QUEUE_LEGAL",
+            "queue": "ssm-legal-hmg"
+          },
+          {
+            "binding": "QUEUE_OPERATIONS",
+            "queue": "ssm-operations-hmg"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "ssm-legal-hmg",
+            "max_batch_size": 25,
+            "max_batch_timeout": 5,
+            "max_retries": 5,
+            "dead_letter_queue": "ssm-dlq-hmg"
+          }
+        ]
+      },
+      "triggers": {
+        "crons": [
+          "*/1 * * * *",
+          "0 * * * *"
+        ]
+      },
+      "routes": [
+        {
+          "pattern": "hmg-ssm.serigy.net/api/legal/*",
+          "zone_name": "serigy.net"
+        }
+      ]
+    },
+    "prd": {
+      "name": "ssm-legal",
+      "vars": {
+        "ENVIRONMENT": "prd",
+        "R2_BUCKET_NAME": "ssm-documents",
+        "R2_ACCOUNT_ID": "86dd3c836ae52e572ce13a51e3d63390",
+        "SERVICE_NAME": "legal-worker",
+        "JWT_ISSUER": "https://ssm.serigy.net",
+        "JWT_AUDIENCE": "ssm",
+        "ACCESS_TOKEN_TTL_SECONDS": "900",
+        "REFRESH_TOKEN_TTL_SECONDS": "1209600",
+        "CORS_ORIGINS": "https://ssm.serigy.net"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "ssm-legal",
+          "database_id": "PLACEHOLDER",
+          "migrations_dir": "../migrations/legal"
+        }
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "KV",
+          "id": "8cad42a3ede44ea29f2d87cdeac29447"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "R2",
+          "bucket_name": "ssm-documents"
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "COORDINATOR",
+            "class_name": "Coordinator",
+            "script_name": "ssm-gateway"
+          }
+        ]
+      },
+      "queues": {
+        "producers": [
+          {
+            "binding": "QUEUE_IDENTITY",
+            "queue": "ssm-identity"
+          },
+          {
+            "binding": "QUEUE_FINANCIAL",
+            "queue": "ssm-financial"
+          },
+          {
+            "binding": "QUEUE_HR",
+            "queue": "ssm-hr"
+          },
+          {
+            "binding": "QUEUE_LEGAL",
+            "queue": "ssm-legal"
+          },
+          {
+            "binding": "QUEUE_OPERATIONS",
+            "queue": "ssm-operations"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "ssm-legal",
+            "max_batch_size": 25,
+            "max_batch_timeout": 5,
+            "max_retries": 5,
+            "dead_letter_queue": "ssm-dlq"
+          }
+        ]
+      },
+      "triggers": {
+        "crons": [
+          "*/1 * * * *",
+          "0 * * * *"
+        ]
+      },
+      "routes": [
+        {
+          "pattern": "ssm.serigy.net/api/legal/*",
+          "zone_name": "serigy.net"
+        }
+      ]
+    }
+  }
+}

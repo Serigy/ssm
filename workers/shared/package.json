@@ -1,0 +1,23 @@
+{
+  "name": "@ssm/worker-common",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@ssm/contracts": "workspace:*",
+    "hono": "^4.7.7",
+    "jose": "^6.0.10",
+    "zod": "^3.24.3",
+    "aws4fetch": "^1.0.20"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250508.0",
+    "wrangler": "^4.14.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  }
+}

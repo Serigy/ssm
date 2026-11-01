@@ -97,6 +97,7 @@ export const createEmployeeSchema = employeeSchema
     personalEmail: true,
     phone: true,
     dateOfBirth: true,
+    nationalId: true,
     contractType: true,
     jobTitle: true,
     departmentId: true,
@@ -104,7 +105,18 @@ export const createEmployeeSchema = employeeSchema
     startDate: true,
     salary: true,
   })
-  .partial({ personalEmail: true, phone: true, dateOfBirth: true, salary: true });
+  // `nationalId` entra aqui porque sem ele não havia caminho nenhum para gravar
+  // o campo: a coluna cifrada existe, a chave de cifra existe, a projeção que o
+  // esconde de quem não tem permissão existe — e o valor nunca chegava. Ele é
+  // cifrado com AES-GCM antes de tocar o banco e só volta para quem tem
+  // hr:payroll:read.
+  .partial({
+    personalEmail: true,
+    phone: true,
+    dateOfBirth: true,
+    nationalId: true,
+    salary: true,
+  });
 export type CreateEmployee = z.infer<typeof createEmployeeSchema>;
 
 export const updateEmployeeSchema = createEmployeeSchema.partial();

@@ -1,0 +1,233 @@
+// ssm-gateway · Cloudflare Worker
+//
+// Três ambientes: o padrão é `dev` e roda inteiro no Miniflare, sem tocar a
+// conta. `hmg` e `prd` são reais, com bancos, filas e namespaces separados —
+// os ids são preenchidos por scripts/cf-provision.sh.
+//
+//   pnpm --filter @ssm/worker-gateway dev
+//   pnpm --filter @ssm/worker-gateway deploy:hmg
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ssm-gateway-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "dev": {
+    "port": 8800,
+    "local_protocol": "http"
+  },
+  "vars": {
+    "ENVIRONMENT": "dev",
+    "SERVICE_NAME": "gateway-worker",
+    "JWT_ISSUER": "http://localhost:8801",
+    "JWT_AUDIENCE": "ssm",
+    "ACCESS_TOKEN_TTL_SECONDS": "900",
+    "REFRESH_TOKEN_TTL_SECONDS": "1209600",
+    "CORS_ORIGINS": "http://localhost:4200"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "local-shared"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "R2",
+      "bucket_name": "ssm-documents-dev"
+    }
+  ],
+  "services": [
+    { "binding": "SVC_IDENTITY", "service": "ssm-identity-dev" },
+    { "binding": "SVC_FINANCIAL", "service": "ssm-financial-dev" },
+    { "binding": "SVC_HR", "service": "ssm-hr-dev" },
+    { "binding": "SVC_LEGAL", "service": "ssm-legal-dev" },
+    { "binding": "SVC_OPERATIONS", "service": "ssm-operations-dev" }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "COORDINATOR",
+        "class_name": "Coordinator"
+      }
+    ]
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "QUEUE_IDENTITY",
+        "queue": "ssm-identity-dev"
+      },
+      {
+        "binding": "QUEUE_FINANCIAL",
+        "queue": "ssm-financial-dev"
+      },
+      {
+        "binding": "QUEUE_HR",
+        "queue": "ssm-hr-dev"
+      },
+      {
+        "binding": "QUEUE_LEGAL",
+        "queue": "ssm-legal-dev"
+      },
+      {
+        "binding": "QUEUE_OPERATIONS",
+        "queue": "ssm-operations-dev"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "Coordinator"
+      ]
+    }
+  ],
+  "env": {
+    "hmg": {
+      "name": "ssm-gateway-hmg",
+      "vars": {
+        "ENVIRONMENT": "hmg",
+        "SERVICE_NAME": "gateway-worker",
+        "JWT_ISSUER": "https://hmg-ssm.serigy.net",
+        "JWT_AUDIENCE": "ssm",
+        "ACCESS_TOKEN_TTL_SECONDS": "900",
+        "REFRESH_TOKEN_TTL_SECONDS": "1209600",
+        "CORS_ORIGINS": "https://hmg-ssm.serigy.net"
+      },
+      "kv_namespaces": [
+        {
+          "binding": "KV",
+          "id": "bf95ed276201405d89bc84f0bf00c80c"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "R2",
+          "bucket_name": "ssm-documents-hmg"
+        }
+      ],
+      "services": [
+        { "binding": "SVC_IDENTITY", "service": "ssm-identity-hmg" },
+        { "binding": "SVC_FINANCIAL", "service": "ssm-financial-hmg" },
+        { "binding": "SVC_HR", "service": "ssm-hr-hmg" },
+        { "binding": "SVC_LEGAL", "service": "ssm-legal-hmg" },
+        { "binding": "SVC_OPERATIONS", "service": "ssm-operations-hmg" }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "COORDINATOR",
+            "class_name": "Coordinator"
+          }
+        ]
+      },
+      "queues": {
+        "producers": [
+          {
+            "binding": "QUEUE_IDENTITY",
+            "queue": "ssm-identity-hmg"
+          },
+          {
+            "binding": "QUEUE_FINANCIAL",
+            "queue": "ssm-financial-hmg"
+          },
+          {
+            "binding": "QUEUE_HR",
+            "queue": "ssm-hr-hmg"
+          },
+          {
+            "binding": "QUEUE_LEGAL",
+            "queue": "ssm-legal-hmg"
+          },
+          {
+            "binding": "QUEUE_OPERATIONS",
+            "queue": "ssm-operations-hmg"
+          }
+        ]
+      },
+      "routes": [
+        {
+          "pattern": "hmg-ssm.serigy.net/api/v1/*",
+          "zone_name": "serigy.net"
+        }
+      ]
+    },
+    "prd": {
+      "name": "ssm-gateway",
+      "vars": {
+        "ENVIRONMENT": "prd",
+        "SERVICE_NAME": "gateway-worker",
+        "JWT_ISSUER": "https://ssm.serigy.net",
+        "JWT_AUDIENCE": "ssm",
+        "ACCESS_TOKEN_TTL_SECONDS": "900",
+        "REFRESH_TOKEN_TTL_SECONDS": "1209600",
+        "CORS_ORIGINS": "https://ssm.serigy.net"
+      },
+      "kv_namespaces": [
+        {
+          "binding": "KV",
+          "id": "8cad42a3ede44ea29f2d87cdeac29447"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "R2",
+          "bucket_name": "ssm-documents"
+        }
+      ],
+      "services": [
+        { "binding": "SVC_IDENTITY", "service": "ssm-identity" },
+        { "binding": "SVC_FINANCIAL", "service": "ssm-financial" },
+        { "binding": "SVC_HR", "service": "ssm-hr" },
+        { "binding": "SVC_LEGAL", "service": "ssm-legal" },
+        { "binding": "SVC_OPERATIONS", "service": "ssm-operations" }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "COORDINATOR",
+            "class_name": "Coordinator"
+          }
+        ]
+      },
+      "queues": {
+        "producers": [
+          {
+            "binding": "QUEUE_IDENTITY",
+            "queue": "ssm-identity"
+          },
+          {
+            "binding": "QUEUE_FINANCIAL",
+            "queue": "ssm-financial"
+          },
+          {
+            "binding": "QUEUE_HR",
+            "queue": "ssm-hr"
+          },
+          {
+            "binding": "QUEUE_LEGAL",
+            "queue": "ssm-legal"
+          },
+          {
+            "binding": "QUEUE_OPERATIONS",
+            "queue": "ssm-operations"
+          }
+        ]
+      },
+      "routes": [
+        {
+          "pattern": "ssm.serigy.net/api/v1/*",
+          "zone_name": "serigy.net"
+        }
+      ]
+    }
+  }
+}

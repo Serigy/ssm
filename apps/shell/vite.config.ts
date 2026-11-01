@@ -69,10 +69,26 @@ export default defineConfig({
   server: {
     port: 4200,
     strictPort: true,
+    /**
+     * O navegador fala com o Vite, que reencaminha /api para os Workers.
+     *
+     * Na pilha em contêiner havia um destino só, o gateway, que sabia rotear.
+     * Na Cloudflare não há gateway proxy: cada Worker declara em wrangler.jsonc
+     * a rota que atende, e a borda entrega direto. Em produção o navegador vai
+     * para `ssm.serigy.net` e a Cloudflare resolve; aqui o Vite reproduz esse
+     * roteamento, para o front-end ver a mesma origem única dos dois lados e os
+     * cookies se comportarem igual.
+     *
+     * A ordem importa: `/api/v1` (o status agregado) precisa vir antes da regra
+     * genérica, senão ele seria capturado por ela.
+     */
     proxy: {
-      // In development the browser talks to Vite, which forwards /api to the
-      // gateway. Same-origin in dev as in production, so cookies behave the same.
-      '/api': { target: process.env.VITE_API_URL ?? 'http://localhost:3000', changeOrigin: true },
+      '/api/identity': { target: 'http://localhost:8801', changeOrigin: true },
+      '/api/financial': { target: 'http://localhost:8802', changeOrigin: true },
+      '/api/hr': { target: 'http://localhost:8803', changeOrigin: true },
+      '/api/legal': { target: 'http://localhost:8804', changeOrigin: true },
+      '/api/operations': { target: 'http://localhost:8805', changeOrigin: true },
+      '/api/v1': { target: 'http://localhost:8800', changeOrigin: true },
     },
   },
   build: {

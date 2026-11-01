@@ -138,3 +138,15 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
+
+# --- Cloudflare ----------------------------------------------------------
+.wrangler/
+workers/**/.wrangler/
+# Estado local do Miniflare, comum aos seis Workers.
+workers/.wrangler-state/
+workers/seed/generated/
+workers/**/worker-configuration.d.ts
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+workers/.wrangler-run/

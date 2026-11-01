@@ -17,7 +17,7 @@ Quatro níveis. O nível determina o tratamento — não é rótulo decorativo.
 | `employees.salary_minor` | hr-svc / Postgres | Omitido da projeção sem `hr:payroll:read` |
 | `employees.date_of_birth` | hr-svc / Postgres | Idem |
 | `employees.personal_email`, `phone`, `address` | hr-svc / Postgres | Idem |
-| `users.password_hash` | identity-svc / Postgres | Argon2id, 64 MiB, 3 passes |
+| `users.password_hash` | identity-worker / D1 | Argon2id, 19 MiB, 2 passes, p=1 |
 | `refresh_tokens.token_hash` | identity-svc / Postgres | SHA-256 do token; o token nunca é armazenado |
 | PDFs de contrato e fatura | R2 | Bucket privado; acesso só por URL assinada de 2 a 5 minutos |
 

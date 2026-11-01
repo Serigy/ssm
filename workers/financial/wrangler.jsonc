@@ -1,0 +1,280 @@
+// ssm-financial · Cloudflare Worker
+//
+// Três ambientes: o padrão é `dev` e roda inteiro no Miniflare, sem tocar a
+// conta. `hmg` e `prd` são reais, com bancos, filas e namespaces separados —
+// os ids são preenchidos por scripts/cf-provision.sh.
+//
+//   pnpm --filter @ssm/worker-financial dev
+//   pnpm --filter @ssm/worker-financial deploy:hmg
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ssm-financial-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "dev": {
+    "port": 8802,
+    "local_protocol": "http"
+  },
+  "vars": {
+    "ENVIRONMENT": "dev",
+    "SERVICE_NAME": "financial-worker",
+    "JWT_ISSUER": "http://localhost:8801",
+    "JWT_AUDIENCE": "ssm",
+    "ACCESS_TOKEN_TTL_SECONDS": "900",
+    "REFRESH_TOKEN_TTL_SECONDS": "1209600",
+    "CORS_ORIGINS": "http://localhost:4200"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ssm-financial-dev",
+      "database_id": "local-financial",
+      "migrations_dir": "../migrations/financial"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "local-shared"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "R2",
+      "bucket_name": "ssm-documents-dev"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "COORDINATOR",
+        "class_name": "Coordinator"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "Coordinator"
+      ]
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "QUEUE_IDENTITY",
+        "queue": "ssm-identity-dev"
+      },
+      {
+        "binding": "QUEUE_FINANCIAL",
+        "queue": "ssm-financial-dev"
+      },
+      {
+        "binding": "QUEUE_HR",
+        "queue": "ssm-hr-dev"
+      },
+      {
+        "binding": "QUEUE_LEGAL",
+        "queue": "ssm-legal-dev"
+      },
+      {
+        "binding": "QUEUE_OPERATIONS",
+        "queue": "ssm-operations-dev"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "ssm-financial-dev",
+        "max_batch_size": 25,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "ssm-dlq-dev"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": [
+      "*/1 * * * *"
+    ]
+  },
+  "env": {
+    "hmg": {
+      "name": "ssm-financial-hmg",
+      "vars": {
+        "ENVIRONMENT": "hmg",
+        "SERVICE_NAME": "financial-worker",
+        "JWT_ISSUER": "https://hmg-ssm.serigy.net",
+        "JWT_AUDIENCE": "ssm",
+        "ACCESS_TOKEN_TTL_SECONDS": "900",
+        "REFRESH_TOKEN_TTL_SECONDS": "1209600",
+        "CORS_ORIGINS": "https://hmg-ssm.serigy.net"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "ssm-financial-hmg",
+          "database_id": "20d82934-9a2c-41b7-aca6-0e53b5a565db",
+          "migrations_dir": "../migrations/financial"
+        }
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "KV",
+          "id": "bf95ed276201405d89bc84f0bf00c80c"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "R2",
+          "bucket_name": "ssm-documents-hmg"
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "COORDINATOR",
+            "class_name": "Coordinator",
+            "script_name": "ssm-gateway-hmg"
+          }
+        ]
+      },
+      "queues": {
+        "producers": [
+          {
+            "binding": "QUEUE_IDENTITY",
+            "queue": "ssm-identity-hmg"
+          },
+          {
+            "binding": "QUEUE_FINANCIAL",
+            "queue": "ssm-financial-hmg"
+          },
+          {
+            "binding": "QUEUE_HR",
+            "queue": "ssm-hr-hmg"
+          },
+          {
+            "binding": "QUEUE_LEGAL",
+            "queue": "ssm-legal-hmg"
+          },
+          {
+            "binding": "QUEUE_OPERATIONS",
+            "queue": "ssm-operations-hmg"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "ssm-financial-hmg",
+            "max_batch_size": 25,
+            "max_batch_timeout": 5,
+            "max_retries": 5,
+            "dead_letter_queue": "ssm-dlq-hmg"
+          }
+        ]
+      },
+      "triggers": {
+        "crons": [
+          "*/1 * * * *"
+        ]
+      },
+      "routes": [
+        {
+          "pattern": "hmg-ssm.serigy.net/api/financial/*",
+          "zone_name": "serigy.net"
+        }
+      ]
+    },
+    "prd": {
+      "name": "ssm-financial",
+      "vars": {
+        "ENVIRONMENT": "prd",
+        "SERVICE_NAME": "financial-worker",
+        "JWT_ISSUER": "https://ssm.serigy.net",
+        "JWT_AUDIENCE": "ssm",
+        "ACCESS_TOKEN_TTL_SECONDS": "900",
+        "REFRESH_TOKEN_TTL_SECONDS": "1209600",
+        "CORS_ORIGINS": "https://ssm.serigy.net"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "ssm-financial",
+          "database_id": "PLACEHOLDER",
+          "migrations_dir": "../migrations/financial"
+        }
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "KV",
+          "id": "8cad42a3ede44ea29f2d87cdeac29447"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "R2",
+          "bucket_name": "ssm-documents"
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "COORDINATOR",
+            "class_name": "Coordinator",
+            "script_name": "ssm-gateway"
+          }
+        ]
+      },
+      "queues": {
+        "producers": [
+          {
+            "binding": "QUEUE_IDENTITY",
+            "queue": "ssm-identity"
+          },
+          {
+            "binding": "QUEUE_FINANCIAL",
+            "queue": "ssm-financial"
+          },
+          {
+            "binding": "QUEUE_HR",
+            "queue": "ssm-hr"
+          },
+          {
+            "binding": "QUEUE_LEGAL",
+            "queue": "ssm-legal"
+          },
+          {
+            "binding": "QUEUE_OPERATIONS",
+            "queue": "ssm-operations"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "ssm-financial",
+            "max_batch_size": 25,
+            "max_batch_timeout": 5,
+            "max_retries": 5,
+            "dead_letter_queue": "ssm-dlq"
+          }
+        ]
+      },
+      "triggers": {
+        "crons": [
+          "*/1 * * * *"
+        ]
+      },
+      "routes": [
+        {
+          "pattern": "ssm.serigy.net/api/financial/*",
+          "zone_name": "serigy.net"
+        }
+      ]
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { SetMetadata } from '@nestjs/common';
+import { SetMetadata, type CustomDecorator } from '@nestjs/common';
 
 export const IDEMPOTENT_KEY = 'ssm:idempotent';
 export const CHECK_REVOCATION_KEY = 'ssm:check-revocation';
@@ -11,7 +11,7 @@ export const CHECK_REVOCATION_KEY = 'ssm:check-revocation';
  * recording a payment, issuing an invoice, offboarding a person. Not on
  * creating a draft, where a duplicate is visible and deletable.
  */
-export const Idempotent = () => SetMetadata(IDEMPOTENT_KEY, true);
+export const Idempotent = (): CustomDecorator<string> => SetMetadata(IDEMPOTENT_KEY, true);
 
 /**
  * Forces a token-revocation lookup on a route that would not otherwise get one.
@@ -19,4 +19,5 @@ export const Idempotent = () => SetMetadata(IDEMPOTENT_KEY, true);
  * Mutating requests are checked anyway. This is for the rare GET that exposes
  * enough that a revoked token must not reach it — an export, a payroll figure.
  */
-export const CheckRevocation = () => SetMetadata(CHECK_REVOCATION_KEY, true);
+export const CheckRevocation = (): CustomDecorator<string> =>
+  SetMetadata(CHECK_REVOCATION_KEY, true);

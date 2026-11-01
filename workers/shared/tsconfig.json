@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["@cloudflare/workers-types"],
+    "noEmit": true,
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    // No DOM: a Worker is not a browser. Leaving DOM in lets code compile
+    // against APIs (localStorage, document) that throw at runtime.
+    "jsx": "react-jsx"
+  },
+  "include": ["src/**/*.ts"]
+}

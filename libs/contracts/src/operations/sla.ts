@@ -34,6 +34,21 @@ export const slaPeriodSchema = z.object({
 export type SlaPeriod = z.infer<typeof slaPeriodSchema>;
 
 /**
+ * Corpo da apuração mensal.
+ *
+ * Estava em apps/ops-svc/src/sla/sla.dto.ts. Com o Worker atendendo a mesma
+ * rota, duas definições da mesma forma acabariam divergindo — e esta em
+ * particular carrega a base de cálculo de um crédito que vira linha de fatura.
+ */
+export const reckonSlaSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}-01$/, 'Use o primeiro dia do mês, como 2026-08-01.'),
+  environmentId: uuidSchema,
+  /** Mensalidade do contrato — a base sobre a qual a penalidade incide. */
+  monthlyFee: moneySchema,
+});
+export type ReckonSla = z.infer<typeof reckonSlaSchema>;
+
+/**
  * The penalty rule from the seeded contract: 5% of the monthly fee for every
  * 0.5% below target, capped at 20%.
  *
