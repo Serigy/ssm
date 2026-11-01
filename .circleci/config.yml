@@ -1,4 +1,4 @@
-# Same gate as the "Lint, tipos e testes" job in .github/workflows/ci.yml.
+# Post-merge verification of the protected branches.
 version: 2.1
 
 jobs:
@@ -47,4 +47,8 @@ jobs:
 workflows:
   verificacao:
     jobs:
-      - check
+      - check:
+          # Runs after the merge. The gate before it is .github/workflows/mr-check.yml.
+          filters:
+            branches:
+              only: [development, staging, main]

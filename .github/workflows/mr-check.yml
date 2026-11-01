@@ -1,0 +1,46 @@
+name: MR Check
+
+# The check names carry the target branch, so each protected branch requires
+# its own: ssm-worker-mr-check-development, ssm-web-mr-check-staging, and so on.
+# No path filter here: a required check that never starts blocks the merge.
+on:
+  pull_request:
+    branches: [development, staging, main]
+
+concurrency:
+  group: mr-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: ${{ matrix.check }}-mr-check-${{ github.base_ref }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - check: ssm-worker
+            projects: '@ssm/worker-*,contracts'
+          - check: ssm-web
+            projects: 'shell,mfe-*,ui-kit,contracts'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Gerar segredos de teste
+        run: ./scripts/gen-secrets.sh
+
+      - name: Lint, tipos, testes e build
+        run: pnpm nx run-many -t lint,typecheck,test,build -p '${{ matrix.projects }}' --parallel=2
+        env:
+          SSM_SECRETS_DIR: ${{ github.workspace }}/secrets/local

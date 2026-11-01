@@ -14,6 +14,7 @@ federados em React.
 | Trabalhar em um módulo | [modules/](modules/) |
 | Consumir a API | [api/](api/) |
 | Publicar em um cluster | [runbooks/implantacao.md](runbooks/implantacao.md) |
+| Levar uma mudança até a `main` | [runbooks/fluxo-de-branches.md](runbooks/fluxo-de-branches.md) |
 | Entender as decisões de segurança | [security/](security/) |
 | Construir uma tela | [design/](design/) |
 
