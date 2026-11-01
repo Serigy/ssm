@@ -4,7 +4,7 @@ import {
   type LoginRequest,
   type Session,
 } from '@ssm/contracts';
-import { HttpProblem, type BaseBindings } from '@ssm/worker-common';
+import { HttpProblem, type BaseBindings, type Database, type DbStatement } from '@ssm/worker-common';
 import { hashPassword, needsRehash, verifyPassword } from './passwords.js';
 import { mintRefreshToken, sha256Hex, signAccessToken, type TokenUser } from './tokens.js';
 
@@ -18,8 +18,10 @@ interface UserRow {
   password_hash: string;
   display_name: string;
   status: string;
-  roles: string;
+  /** jsonb: o driver já devolve o array, sem JSON.parse. */
+  roles: string[];
   failed_attempts: number;
+  /** timestamptz, devolvido como ISO-8601 em UTC (ver database.ts). */
   locked_until: string | null;
 }
 
@@ -52,16 +54,20 @@ function toTokenUser(row: UserRow): TokenUser {
     tenantId: row.tenant_id,
     email: row.email,
     displayName: row.display_name,
-    roles: JSON.parse(row.roles) as string[],
+    roles: row.roles,
   };
 }
 
 export async function login(
   env: BaseBindings,
+  db: Database,
   dto: LoginRequest,
   meta: RequestMeta,
 ): Promise<IssuedPair> {
-  const user = await env.DB.prepare(
+  // Sem tenantId de propósito: o login é o passo que descobre o tenant, e o
+  // índice único (tenant_id, lower(email)) é por tenant. Tudo o que vem depois
+  // filtra por `tenant_id` primeiro.
+  const user = await db.prepare(
     'SELECT * FROM users WHERE lower(email) = lower(?)',
   )
     .bind(dto.email)
@@ -83,7 +89,7 @@ export async function login(
 
   const valid = await verifyPassword(user.password_hash, dto.password).catch(() => false);
   if (!valid) {
-    await registerFailure(env, user);
+    await registerFailure(db, user);
     throw HttpProblem.unauthorized('E-mail ou senha inválidos.');
   }
 
@@ -93,26 +99,27 @@ export async function login(
     );
   }
 
-  const statements = [
-    env.DB.prepare(
+  const statements: DbStatement[] = [
+    db.prepare(
       `UPDATE users SET failed_attempts = 0, locked_until = NULL, last_login_at = ?
-        WHERE id = ?`,
-    ).bind(now(), user.id),
+        WHERE tenant_id = ? AND id = ?`,
+    ).bind(now(), user.tenant_id, user.id),
   ];
 
   // Senha ainda com o custo antigo: refaz o hash agora que ela está em mãos.
   // É a única hora em que dá — o hash não é reversível.
   if (needsRehash(user.password_hash)) {
     statements.push(
-      env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(
+      db.prepare('UPDATE users SET password_hash = ? WHERE tenant_id = ? AND id = ?').bind(
         await hashPassword(dto.password),
+        user.tenant_id,
         user.id,
       ),
     );
   }
-  await env.DB.batch(statements);
+  await db.batch(statements);
 
-  return issuePair(env, user, crypto.randomUUID(), meta);
+  return issuePair(env, db, user, crypto.randomUUID(), meta);
 }
 
 /**
@@ -123,11 +130,14 @@ export async function login(
  */
 export async function refresh(
   env: BaseBindings,
+  db: Database,
   rawToken: string,
   meta: RequestMeta,
 ): Promise<IssuedPair> {
   const hash = await sha256Hex(rawToken);
-  const stored = await env.DB.prepare('SELECT * FROM refresh_tokens WHERE token_hash = ?')
+  // O hash é a chave e vem de um segredo de 256 bits: é a busca que descobre o
+  // tenant, como o e-mail no login. Daqui em diante, tudo filtra por tenant.
+  const stored = await db.prepare('SELECT * FROM refresh_tokens WHERE token_hash = ?')
     .bind(hash)
     .first<RefreshRow>();
 
@@ -141,8 +151,8 @@ export async function refresh(
         userId: stored.user_id,
       }),
     );
-    await env.DB.prepare('UPDATE refresh_tokens SET revoked_at = ? WHERE family_id = ?')
-      .bind(now(), stored.family_id)
+    await db.prepare('UPDATE refresh_tokens SET revoked_at = ? WHERE tenant_id = ? AND family_id = ?')
+      .bind(now(), stored.tenant_id, stored.family_id)
       .run();
     // O refresh vazou, então presume-se que o access token também vazou.
     await revokeUserBefore(env, stored.user_id);
@@ -153,21 +163,25 @@ export async function refresh(
     throw HttpProblem.unauthorized('Sessão expirada. Entre novamente.');
   }
 
-  const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?')
-    .bind(stored.user_id)
+  const user = await db.prepare('SELECT * FROM users WHERE tenant_id = ? AND id = ?')
+    .bind(stored.tenant_id, stored.user_id)
     .first<UserRow>();
 
   if (!user || user.status !== 'active') {
-    await env.DB.prepare('UPDATE refresh_tokens SET revoked_at = ? WHERE family_id = ?')
-      .bind(now(), stored.family_id)
+    await db.prepare('UPDATE refresh_tokens SET revoked_at = ? WHERE tenant_id = ? AND family_id = ?')
+      .bind(now(), stored.tenant_id, stored.family_id)
       .run();
     throw HttpProblem.unauthorized('Conta indisponível.');
   }
 
   // Marcar como usado e emitir o próximo no mesmo batch: se a emissão falhar, o
   // token antigo continua válido em vez de a sessão morrer no meio.
-  return issuePair(env, user, stored.family_id, meta, [
-    env.DB.prepare('UPDATE refresh_tokens SET used_at = ? WHERE token_hash = ?').bind(now(), hash),
+  return issuePair(env, db, user, stored.family_id, meta, [
+    db.prepare('UPDATE refresh_tokens SET used_at = ? WHERE tenant_id = ? AND token_hash = ?').bind(
+      now(),
+      stored.tenant_id,
+      hash,
+    ),
   ]);
 }
 
@@ -179,25 +193,25 @@ export async function refresh(
  * fecha essa janela, que é justamente o que alguém que clica "Sair" depois de
  * perder um notebook espera que aconteça.
  */
-export async function logout(env: BaseBindings, rawToken: string): Promise<void> {
-  const stored = await env.DB.prepare('SELECT * FROM refresh_tokens WHERE token_hash = ?')
+export async function logout(env: BaseBindings, db: Database, rawToken: string): Promise<void> {
+  const stored = await db.prepare('SELECT * FROM refresh_tokens WHERE token_hash = ?')
     .bind(await sha256Hex(rawToken))
     .first<RefreshRow>();
   if (!stored) return;
 
-  await env.DB.prepare('UPDATE refresh_tokens SET revoked_at = ? WHERE family_id = ?')
-    .bind(now(), stored.family_id)
+  await db.prepare('UPDATE refresh_tokens SET revoked_at = ? WHERE tenant_id = ? AND family_id = ?')
+    .bind(now(), stored.tenant_id, stored.family_id)
     .run();
   await revokeUserBefore(env, stored.user_id);
 }
 
-export async function session(env: BaseBindings, userId: string): Promise<Session> {
-  const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?')
-    .bind(userId)
+export async function session(db: Database, tenantId: string, userId: string): Promise<Session> {
+  const user = await db.prepare('SELECT * FROM users WHERE tenant_id = ? AND id = ?')
+    .bind(tenantId, userId)
     .first<UserRow>();
   if (!user) throw HttpProblem.unauthorized('Sessão inválida.');
 
-  const roles = JSON.parse(user.roles) as string[];
+  const roles = user.roles;
   const perms = permissionsFor(roles);
   return {
     user: {
@@ -216,10 +230,11 @@ export async function session(env: BaseBindings, userId: string): Promise<Sessio
 
 async function issuePair(
   env: BaseBindings,
+  db: Database,
   user: UserRow,
   familyId: string,
   meta: RequestMeta,
-  extra: D1PreparedStatement[] = [],
+  extra: DbStatement[] = [],
 ): Promise<IssuedPair> {
   const ttl = Number(env.ACCESS_TOKEN_TTL_SECONDS);
   const accessToken = await signAccessToken(env, toTokenUser(user));
@@ -229,9 +244,9 @@ async function issuePair(
     Date.now() + Number(env.REFRESH_TOKEN_TTL_SECONDS) * 1000,
   ).toISOString();
 
-  await env.DB.batch([
+  await db.batch([
     ...extra,
-    env.DB.prepare(
+    db.prepare(
       `INSERT INTO refresh_tokens (
          token_hash, user_id, tenant_id, family_id, expires_at, user_agent, ip_address
        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -249,15 +264,17 @@ async function issuePair(
   return { accessToken, refreshToken: raw, expiresIn: ttl };
 }
 
-async function registerFailure(env: BaseBindings, user: UserRow): Promise<void> {
+async function registerFailure(db: Database, user: UserRow): Promise<void> {
   const attempts = user.failed_attempts + 1;
   const lock =
     attempts >= MAX_FAILED_ATTEMPTS
       ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000).toISOString()
       : user.locked_until;
 
-  await env.DB.prepare('UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?')
-    .bind(attempts, lock, user.id)
+  await db.prepare(
+    'UPDATE users SET failed_attempts = ?, locked_until = ? WHERE tenant_id = ? AND id = ?',
+  )
+    .bind(attempts, lock, user.tenant_id, user.id)
     .run();
 
   if (lock && attempts >= MAX_FAILED_ATTEMPTS) {

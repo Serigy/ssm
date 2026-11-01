@@ -60,6 +60,19 @@ por fora enquanto o `workerd` o segura devolve `SQLITE_BUSY` e derruba o
 runtime inteiro. A ferramenta de semente confere a porta e recusa, mas a ordem
 é: parar, semear, subir.
 
+## Banco: D1 e Neon durante a transição
+
+O ADR 0014 troca o D1 pelo Neon, um módulo por vez. **identity já está no Neon**;
+financial, hr, legal, operations e o gateway seguem no D1 (`env.DB`).
+
+- `workers/shared/src/database.ts` dá ao código o mesmo subconjunto do D1
+  (`prepare/bind/first/all/run` e `batch`) sobre Postgres, via Hyperdrive. O
+  módulo liga isso com `createApp(base, { postgres: true })` e lê `c.get('db')`.
+- Migrações Postgres: `workers/migrations/postgres/` (ver o README de lá).
+- Em dev, o `wrangler dev` conecta direto no Neon de desenvolvimento pelo
+  `.env` que `scripts/cf-devvars.sh` gera (o `.dev.vars` não serve para isso).
+- hmg e prd do identity dependem de Hyperdrives que ainda não foram criados.
+
 ## Decisões fechadas por medição
 
 - **Argon2id continua, com o custo mínimo da OWASP.** Medido dentro do workerd:

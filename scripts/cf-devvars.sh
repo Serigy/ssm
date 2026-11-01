@@ -44,6 +44,20 @@ emit() {
 # A chave privada vai só para identity: é o único Worker que assina. Os demais
 # recebem a pública e verificam — a mesma separação da pilha em contêiner.
 emit identity   JWT_PUBLIC_KEY=jwt_public_key.pem JWT_PRIVATE_KEY=jwt_private_key.pem
+
+# A conexão local do Hyperdrive NÃO vai no .dev.vars. O wrangler a lê do
+# ambiente do próprio processo (ou do .env), antes de o Worker existir: com a
+# variável só no .dev.vars, `wrangler dev` recusa subir ("you should use a local
+# Postgres connection string"). Medido, não suposto. .env é ignorado pelo git.
+if [ -s "$SECRETS/neon_identity_url" ]; then
+  umask 077
+  printf 'CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="%s"\n' \
+    "$(< "$SECRETS/neon_identity_url")" > workers/identity/.env
+  chmod 600 workers/identity/.env
+  printf '  %-12s %s\n' identity "conexão Neon (.env)"
+else
+  echo "  aviso: $SECRETS/neon_identity_url ausente; o identity não conecta no Neon" >&2
+fi
 emit financial  JWT_PUBLIC_KEY=jwt_public_key.pem
 # O jurídico assina URL de envio e leitura do PDF do contrato, e para isso
 # precisa das credenciais S3 do R2 — o binding R2 lê e escreve, mas não assina.

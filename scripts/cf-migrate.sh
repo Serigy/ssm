@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Aplica as migrações D1 de todos os módulos em um ambiente.
+# Aplica as migrações D1 dos módulos que ainda estão no D1 em um ambiente.
 #
 #   ./scripts/cf-migrate.sh dev    # local, no Miniflare
 #   ./scripts/cf-migrate.sh hmg
@@ -9,7 +9,9 @@ ENV_NAME="${1:-dev}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-MODULES=(identity financial hr legal operations)
+# identity já está no Neon (ADR 0014): suas migrações são as de
+# workers/migrations/postgres/, aplicadas por apply.mjs, não pelo D1.
+MODULES=(financial hr legal operations)
 
 # Credencial em arquivo, como no cf-provision.sh.
 if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] && [ -z "${CLOUDFLARE_API_KEY:-}" ] && [ "$ENV_NAME" != "dev" ]; then

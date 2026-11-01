@@ -5,10 +5,17 @@ import type { BaseBindings } from './env.js';
 import type { Actor } from './auth.js';
 import { HttpProblem, problemResponse } from './problem.js';
 import { CoordinatorClient } from './coordinator-client.js';
+import { databaseMiddleware, type Database } from './database.js';
 
 export type AppEnv = {
   Bindings: BaseBindings;
-  Variables: { actor: Actor; traceId: string; coordinator: CoordinatorClient };
+  Variables: {
+    actor: Actor;
+    traceId: string;
+    coordinator: CoordinatorClient;
+    /** Só existe nos módulos já no Postgres (`createApp(base, { postgres: true })`). */
+    db: Database;
+  };
 };
 
 /**
@@ -25,8 +32,12 @@ export type AppEnv = {
  *   idempotência  -> Durable Object, no middleware `idempotent()`
  *   remover header forjado -> não existe mais; ver o bloco adiante
  */
-export function createApp(basePath?: string): Hono<AppEnv> {
+export function createApp(basePath?: string, options: { postgres?: boolean } = {}): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
+
+  // Módulo no Neon: abre a conexão (preguiçosa) da requisição e a fecha ao fim.
+  // Vem primeiro para a sonda de saúde, registrada adiante, também enxergá-la.
+  if (options.postgres) app.use('*', databaseMiddleware());
 
   app.use('*', async (c, next) => {
     // Um id de correlação por cadeia causal, como antes. Só aceita o do cliente
@@ -121,6 +132,15 @@ export function createApp(basePath?: string): Hono<AppEnv> {
         checks.d1 = 'up';
       } catch {
         checks.d1 = 'down';
+      }
+    }
+    // Módulo no Postgres: a conexão da requisição, aberta pelo middleware.
+    if (options.postgres) {
+      try {
+        await c.get('db').prepare('SELECT 1').first();
+        checks.postgres = 'up';
+      } catch {
+        checks.postgres = 'down';
       }
     }
     if (c.env.KV) {

@@ -5,5 +5,11 @@
   "type": "module",
   "scripts": {
     "test": "node --test \"test/*.spec.mjs\""
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.14"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
   }
 }

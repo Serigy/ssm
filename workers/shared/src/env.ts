@@ -22,6 +22,13 @@ export interface BaseBindings {
   DB: D1Database;
 
   /**
+   * Neon, via Hyperdrive (ADR 0014). Presente só nos módulos já migrados —
+   * o Worker de identidade por ora —, que por isso não têm `DB`. O tipo de
+   * `DB` segue obrigatório pelo motivo acima; quem usa Postgres lê isto.
+   */
+  HYPERDRIVE?: Hyperdrive;
+
+  /**
    * Coordination state that tolerates eventual consistency.
    *
    * Only the token denylist lives here. KV propagates writes globally in about

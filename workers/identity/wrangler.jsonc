@@ -32,12 +32,14 @@
     "REFRESH_TOKEN_TTL_SECONDS": "1209600",
     "CORS_ORIGINS": "http://localhost:4200"
   },
-  "d1_databases": [
+  // Banco: Neon, via Hyperdrive (ADR 0014). Em dev o wrangler não passa pelo
+  // Hyperdrive: conecta direto na URL de CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE,
+  // que scripts/cf-devvars.sh grava no .env (e não no .dev.vars: o wrangler lê do ambiente) a partir de secrets/local/neon_identity_url.
+  // O `id` abaixo só precisa ser um UUID bem formado em dev; não existe na conta.
+  "hyperdrive": [
     {
-      "binding": "DB",
-      "database_name": "ssm-identity-dev",
-      "database_id": "local-identity",
-      "migrations_dir": "../migrations/identity"
+      "binding": "HYPERDRIVE",
+      "id": "00000000000000000000000000000000"
     }
   ],
   "kv_namespaces": [
@@ -106,12 +108,15 @@
         "REFRESH_TOKEN_TTL_SECONDS": "1209600",
         "CORS_ORIGINS": "https://hmg-ssm.serigy.net"
       },
-      "d1_databases": [
+      // PENDENTE: o Hyperdrive de hmg ainda não existe. Criar com o papel
+      // ssm_identity (ver workers/migrations/postgres/README.md) e trocar o id.
+      // Enquanto o marcador estiver aqui, o deploy desse ambiente está impedido:
+      // o id não existe na conta e a API da Cloudflare o recusa. (O --dry-run
+      // do wrangler NÃO pega isso; só o deploy de verdade.)
+      "hyperdrive": [
         {
-          "binding": "DB",
-          "database_name": "ssm-identity-hmg",
-          "database_id": "17f369f7-04fe-4c02-b211-417c8d533dfe",
-          "migrations_dir": "../migrations/identity"
+          "binding": "HYPERDRIVE",
+          "id": "PENDENTE-CRIAR-HYPERDRIVE-HMG"
         }
       ],
       "kv_namespaces": [
@@ -179,12 +184,14 @@
         "REFRESH_TOKEN_TTL_SECONDS": "1209600",
         "CORS_ORIGINS": "https://ssm.serigy.net"
       },
-      "d1_databases": [
+      // PENDENTE: o Hyperdrive de prd ainda não existe. Criar com o papel
+      // ssm_identity (ver workers/migrations/postgres/README.md) e trocar o id.
+      // Enquanto o marcador estiver aqui, o deploy desse ambiente falha de
+      // propósito: wrangler recusa um id que não é UUID.
+      "hyperdrive": [
         {
-          "binding": "DB",
-          "database_name": "ssm-identity",
-          "database_id": "1c2a23ae-bce2-402a-a677-90514dee199c",
-          "migrations_dir": "../migrations/identity"
+          "binding": "HYPERDRIVE",
+          "id": "PENDENTE-CRIAR-HYPERDRIVE-PRD"
         }
       ],
       "kv_namespaces": [
