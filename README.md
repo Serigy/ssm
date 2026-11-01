@@ -1,10 +1,14 @@
 # SSM — Serigy Service Manager
 
 Gestão financeira, de pessoas e jurídica da Serigy Tecnologia e Marketing.
-Três módulos independentes sobre uma arquitetura de microsserviços em NestJS,
-com micro-frontends federados em React.
+Módulos independentes em Cloudflare Workers, com eventos no Cloudflare Queues,
+banco no Neon e micro-frontends federados em React.
 
-![Arquitetura do SSM: navegador, gateway, serviços, bancos e fila](docs/diagrams/arquitetura.svg)
+A troca do D1 pelo Neon está em andamento, e os serviços NestJS em `apps/` saem
+conforme cada módulo muda de casa. Ver o
+[ADR 0014](docs/adr/0014-neon-e-queues.md).
+
+![Arquitetura do SSM: navegador, Workers, Queues, Neon e demais recursos da Cloudflare](docs/diagrams/arquitetura.svg)
 
 A fonte do diagrama está em [docs/diagrams/arquitetura.puml](docs/diagrams/arquitetura.puml).
 
@@ -40,7 +44,8 @@ Depois `http://ssm.localhost` (adicione `127.0.0.1 ssm.localhost` ao `/etc/hosts
 
 | Caminho | O quê |
 |---|---|
-| `apps/` | 6 serviços NestJS, 1 shell, 4 remotes |
+| `workers/` | 6 Workers, migrações e seed |
+| `apps/` | 1 shell, 4 remotes e os 6 serviços NestJS em saída |
 | `libs/contracts` | Tipos e eventos compartilhados — fonte da verdade |
 | `libs/nest-common` | Plataforma dos serviços: config, segredos, auth, bus, storage |
 | `libs/ui-kit` | Design System da Serigy em React |

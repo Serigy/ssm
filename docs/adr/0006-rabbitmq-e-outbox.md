@@ -2,6 +2,8 @@
 
 - **Estado:** Aceita
 - **Data:** 2026-08-17
+- **Atualização (2026-11-01):** o broker passa a ser o Cloudflare Queues (ADR
+  [0014](0014-neon-e-queues.md)). O outbox continua valendo.
 
 ## Contexto
 
