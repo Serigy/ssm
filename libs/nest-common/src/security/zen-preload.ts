@@ -10,7 +10,7 @@ const enabled = process.env.ZEN_ENABLED !== 'false';
 
 if (enabled) {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('@aikidosec/firewall');
     if (process.env.ZEN_BLOCKING === 'true') process.env.AIKIDO_BLOCK = 'true';
   } catch {

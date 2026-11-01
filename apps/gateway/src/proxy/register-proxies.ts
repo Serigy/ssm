@@ -39,7 +39,7 @@ export function registerProxies(app: INestApplication): void {
       ws: false,
 
       on: {
-        proxyReq: (proxyReq, req) => {
+        proxyReq: (proxyReq) => {
           // Carry the correlation id upstream so the whole path shares a trace.
           proxyReq.setHeader(CORRELATION_HEADER, correlationId());
           // Strip anything a client tried to spoof about its own identity.

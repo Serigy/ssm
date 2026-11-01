@@ -34,7 +34,7 @@ let zen: ZenModule | undefined;
 export function loadZen(): ZenModule | undefined {
   if (zen) return zen;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     zen = require('@aikidosec/firewall') as ZenModule;
     return zen;
   } catch {

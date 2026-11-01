@@ -21,4 +21,6 @@ paths = [
 regexes = [
   '''REPLACE_ME_.*''',
   '''REPLACE ME''',
+  # Senha pública dos dados de demonstração (seed e e2e), documentada no README.
+  '''^serigy-desenvolvimento-2026$''',
 ]

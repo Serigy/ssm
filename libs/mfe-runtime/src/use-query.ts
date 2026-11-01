@@ -55,7 +55,6 @@ export function useQuery<T>(
       // Bumping the generation invalidates any in-flight response.
       generation.current++;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);
 
   const refetch = useCallback(() => setTick((t) => t + 1), []);

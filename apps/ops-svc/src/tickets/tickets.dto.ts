@@ -8,7 +8,6 @@ import {
   ticketSchema,
   transitionTicketSchema,
 } from '@ssm/contracts';
-import { z } from 'zod';
 
 export class CreateTicketDto extends createZodDto(createTicketSchema) {}
 export class TransitionTicketDto extends createZodDto(transitionTicketSchema) {}

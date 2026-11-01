@@ -100,14 +100,16 @@ jobs:
           helm repo add bitnami https://charts.bitnami.com/bitnami
           helm dependency build deploy/helm/ssm
           helm lint deploy/helm/ssm --values deploy/helm/ssm/values-kind.yaml
+          # In the workspace, not /tmp: the kubeconform step runs in a container
+          # that only has the workspace mounted.
           helm template ssm deploy/helm/ssm \
-            --values deploy/helm/ssm/values-kind.yaml --namespace ssm > /tmp/rendered.yaml
-          echo "Renderizados $(grep -c '^kind:' /tmp/rendered.yaml) manifestos."
+            --values deploy/helm/ssm/values-kind.yaml --namespace ssm > rendered.yaml
+          echo "Renderizados $(grep -c '^kind:' rendered.yaml) manifestos."
 
       - name: Validar os manifestos renderizados
         uses: docker://ghcr.io/yannh/kubeconform:latest
         with:
-          args: -strict -summary -ignore-missing-schemas /tmp/rendered.yaml
+          args: -strict -summary -ignore-missing-schemas rendered.yaml
 
       - uses: hashicorp/setup-terraform@v3
       - name: Validar o Terraform

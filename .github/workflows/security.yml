@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Varredura Aikido
-        uses: AikidoSec/github-actions-workflow@v1
+        uses: AikidoSec/github-actions-workflow@47d83dbcf3e6635044c4b31cef590c1e095217cc # v1.0.13
         with:
           secret-key: ${{ secrets.AIKIDO_SECRET_KEY }}
           # Blocks the merge on a genuinely exploitable issue rather than on
@@ -79,7 +79,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.app }}
 
       - name: Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: scan/${{ matrix.app }}:ci
           format: sarif
@@ -103,7 +103,9 @@ jobs:
           # then removed is still in the objects and still compromised.
           fetch-depth: 0
 
+      # The CLI rather than gitleaks-action, which requires a paid licence on an
+      # organization repository. Same scan, same .gitleaks.toml.
       - name: Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.30.1 \
+            git /repo --config /repo/.gitleaks.toml --redact --no-banner

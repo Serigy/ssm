@@ -43,7 +43,7 @@ export async function bootstrapService(opts: BootstrapOptions): Promise<INestApp
   if (opts.cookies) {
     // Required to read the HttpOnly refresh cookie. Loaded only where it is
     // needed so the other services carry no cookie-handling surface at all.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const cookieParser = require('cookie-parser') as () => never;
     app.use(cookieParser());
   }
