@@ -243,6 +243,7 @@ export function databaseOver(connection: PgConnection): Database {
 /** OIDs do Postgres que o driver precisa converter. */
 const OID_INT8 = 20;
 const OID_TIMESTAMPTZ = 1184;
+const OID_DATE = 1082;
 
 /** `timestamptz` como ISO-8601 em UTC — a forma que o código já comparava. */
 export function parseTimestamptz(value: string): string {
@@ -258,6 +259,27 @@ export function parseInt8(value: string): number {
     throw new Error(`bigint ${value} não cabe em um número JavaScript sem perda.`);
   }
   return n;
+}
+
+/**
+ * Escolhe o conversor de cada tipo. Os que não são daqui seguem com o padrão do
+ * driver.
+ *
+ * `date` volta como o texto 'AAAA-MM-DD', e não como Date: o driver o
+ * transformaria em meia-noite no fuso da máquina, e a data de admissão de
+ * alguém mudaria de dia conforme onde o Worker rodasse. O D1 guardava o mesmo
+ * texto, e o código compara datas como texto.
+ */
+export function pgTypeParser(
+  oid: number,
+  format: string | undefined,
+  fallback: (oid: number, format: string) => (value: string) => unknown,
+): (value: string) => unknown {
+  const text = format !== 'binary';
+  if (text && oid === OID_TIMESTAMPTZ) return parseTimestamptz;
+  if (text && oid === OID_INT8) return parseInt8;
+  if (text && oid === OID_DATE) return (v: string) => v;
+  return fallback(oid, format ?? 'text');
 }
 
 // --- conexão por requisição -------------------------------------------------
@@ -288,11 +310,10 @@ export function openDatabase(connectionString: string): ManagedDatabase {
       const c = new pg.Client({
         connectionString,
         types: {
-          getTypeParser: ((oid: number, format?: string) => {
-            if (oid === OID_TIMESTAMPTZ && format !== 'binary') return parseTimestamptz;
-            if (oid === OID_INT8 && format !== 'binary') return parseInt8;
-            return pg.types.getTypeParser(oid, (format as 'text' | 'binary') ?? 'text');
-          }) as never,
+          getTypeParser: ((oid: number, format?: string) =>
+            pgTypeParser(oid, format, (o, f) =>
+              pg.types.getTypeParser(o, f as 'text'),
+            )) as never,
         },
       }) as unknown as PgClient;
       await c.connect();

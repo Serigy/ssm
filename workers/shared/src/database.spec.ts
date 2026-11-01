@@ -1,9 +1,11 @@
 import { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
+import { highestNumber } from './sequence.js';
 import {
   databaseOver,
   parseInt8,
   parseTimestamptz,
+  pgTypeParser,
   toPositional,
   type Database,
   type PgConnection,
@@ -68,6 +70,43 @@ describe('tipos do driver', () => {
   test('bigint cabe em número; acima de 2^53 lança em vez de arredondar', () => {
     expect(parseInt8('9007199254740991')).toBe(9007199254740991);
     expect(() => parseInt8('9007199254740993')).toThrow(/não cabe/);
+  });
+});
+
+describe('pgTypeParser', () => {
+  const fallback = () => () => 'padrão';
+
+  test('date fica como texto AAAA-MM-DD, sem passar por Date e fuso', () => {
+    expect(pgTypeParser(1082, 'text', fallback)('2026-03-04')).toBe('2026-03-04');
+  });
+
+  test('timestamptz e int8 usam os conversores da camada', () => {
+    expect(pgTypeParser(1184, 'text', fallback)('2026-11-01 13:00:00+00')).toBe(
+      '2026-11-01T13:00:00.000Z',
+    );
+    expect(pgTypeParser(20, 'text', fallback)('42')).toBe(42);
+  });
+
+  test('o resto segue o padrão do driver', () => {
+    expect(pgTypeParser(25, 'text', fallback)('x')).toBe('padrão');
+    expect(pgTypeParser(1082, 'binary', fallback)('x')).toBe('padrão');
+  });
+});
+
+describe('highestNumber sobre Postgres', () => {
+  test('ordena pelo número, e não pelo texto: COL-00010 vem depois de COL-00009', async () => {
+    const pg = new PGlite();
+    await pg.exec(`CREATE TABLE employees (tenant_id text, employee_number text);
+      INSERT INTO employees VALUES ('t1','COL-00009'), ('t1','COL-00010'), ('t2','COL-00500');`);
+    const db = databaseOver({
+      query: async (t, v) => {
+        const r = await pg.query(t, v as unknown[]);
+        return { rows: r.rows, rowCount: r.affectedRows ?? r.rows.length };
+      },
+    });
+    expect(await highestNumber(db, 'employees', 'employee_number', 't1', 'COL-')).toBe(10);
+    expect(await highestNumber(db, 'employees', 'employee_number', 'vazio', 'COL-')).toBe(0);
+    await pg.close();
   });
 });
 

@@ -45,6 +45,16 @@ export async function withReservedNumber<T>(
 }
 
 /**
+ * O que `highestNumber` exige do banco: o D1 e a camada Postgres servem. O SQL
+ * é o mesmo nos dois dialetos (`substr`, `CAST … AS INTEGER`, `LIKE`).
+ */
+export interface NumberSource {
+  prepare(sql: string): {
+    bind(...values: unknown[]): { first<T>(): Promise<T | null> };
+  };
+}
+
+/**
  * Maior número já usado numa sequência com prefixo fixo.
  *
  * O `substr` começa depois do prefixo e o `CAST` descarta os zeros à esquerda;
@@ -52,7 +62,7 @@ export async function withReservedNumber<T>(
  * 'COL-00010'.
  */
 export async function highestNumber(
-  db: D1Database,
+  db: NumberSource,
   table: string,
   column: string,
   tenantId: string,
