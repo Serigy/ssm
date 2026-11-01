@@ -12,7 +12,7 @@ vai lembrar se a opção óbvia foi considerada.
 | [0001](0001-monorepo-nx.md) | Monorepo com Nx e pnpm | Aceita |
 | [0002](0002-microsservicos-por-modulo.md) | Um microsserviço por módulo de negócio | Aceita |
 | [0003](0003-module-federation.md) | Micro-frontends com Module Federation | Aceita |
-| [0004](0004-postgres-e-mongodb.md) | Postgres para três módulos, MongoDB para o Jurídico | Aceita |
+| [0004](0004-postgres-e-mongodb.md) | Postgres para três módulos, MongoDB para o Jurídico | Substituída pela 0014 |
 | [0005](0005-segredos-em-arquivo.md) | Segredos em arquivo, não em `.env` | Aceita |
 | [0006](0006-rabbitmq-e-outbox.md) | RabbitMQ com outbox transacional | Aceita |
 | [0007](0007-gateway-como-proxy.md) | Gateway é proxy reverso, não BFF | Aceita |
@@ -22,6 +22,7 @@ vai lembrar se a opção óbvia foi considerada.
 | [0011](0011-passport-na-fronteira-de-login.md) | Passport na fronteira de login, não no acesso a recurso | **Proposta** |
 | [0012](0012-perimetro-sem-rede.md) | Perímetro sem rede: o que substitui VCN, subnet e NSG | Aceita |
 | [0013](0013-sentry.md) | Sentry para erros e desempenho | Aceita |
+| [0014](0014-neon-e-queues.md) | Neon como banco e Cloudflare Queues para eventos | Aceita, em migração |
 
 ## Formato
 

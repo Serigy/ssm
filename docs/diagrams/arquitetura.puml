@@ -14,44 +14,47 @@ package "Navegador" {
   }
 }
 
-[gateway] as gateway
+package "Cloudflare" {
+  package "Workers" {
+    [gateway] as gateway
+    [identity] as identity
+    [financial] as financial
+    [hr] as hr
+    [legal] as legal
+    [operations] as operations
+  }
 
-package "Serviços" {
-  [identity] as identity
-  [financial] as financial
-  [hr] as hr
-  [legal] as legal
-  [ops] as ops
+  queue "Queues (eventos)" as queues
+  storage "R2 (documentos)" as r2
+  collections "KV (tokens revogados)" as kv
+  component "Durable Object (coordenação)" as coordinator
 }
 
-database "Postgres" as postgres
-database "MongoDB" as mongo
-queue "RabbitMQ" as rabbit
-storage "R2 (documentos)" as r2
+database "Neon (Postgres)" as neon
 
 shell --> mfeFinanceiro
 shell --> mfePessoas
 shell --> mfeJuridico
 shell --> mfeOperacoes
-shell --> gateway : /api
+shell --> gateway : /api/v1/status
+shell --> identity : /api
+shell --> financial : /api
+shell --> hr : /api
+shell --> legal : /api
+shell --> operations : /api
 
-gateway --> identity
-gateway --> financial
-gateway --> hr
-gateway --> legal
-gateway --> ops
+identity --> neon
+financial --> neon
+hr --> neon
+legal --> neon
+operations --> neon
 
-identity --> postgres
-financial --> postgres
-hr --> postgres
-ops --> postgres
-legal --> mongo
+financial --> queues
+hr --> queues
+legal --> queues
+operations --> queues
 
-financial --> rabbit
-hr --> rabbit
-legal --> rabbit
-
-financial --> r2
-hr --> r2
 legal --> r2
+identity --> kv
+gateway --> coordinator
 @enduml

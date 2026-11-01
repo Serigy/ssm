@@ -1,6 +1,6 @@
 # 0004 — Postgres para três módulos, MongoDB para o Jurídico
 
-- **Estado:** Aceita
+- **Estado:** Substituída pelo ADR [0014](0014-neon-e-queues.md)
 - **Data:** 2026-08-17
 
 ## Contexto

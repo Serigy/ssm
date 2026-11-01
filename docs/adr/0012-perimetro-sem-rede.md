@@ -2,6 +2,8 @@
 
 - **Estado:** Aceito
 - **Data:** 2026-08-18
+- **Atualização (2026-11-01):** com o Neon, o isolamento entre bancos passa a vir
+  de papel e schema por módulo (ADR [0014](0014-neon-e-queues.md)).
 
 ## Contexto
 
