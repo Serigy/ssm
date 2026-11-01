@@ -223,6 +223,10 @@ aikido: ## Run the Aikido CI scan (needs secrets/local/aikido_token)
 	  (echo "secrets/local/aikido_token está vazio. Pegue um token em app.aikido.dev."; exit 1)
 	AIKIDO_API_KEY="$$(cat secrets/local/aikido_token)" npx @aikidosec/cli scan --fail-on=high
 
+.PHONY: diagrams
+diagrams: ## Regenera os SVG de docs/diagrams a partir do PlantUML
+	docker run --rm -u "$$(id -u):$$(id -g)" -e _JAVA_OPTIONS=-Duser.home=/tmp -v "$$PWD/docs/diagrams:/data" plantuml/plantuml:1.2026.2 -tsvg /data/*.puml
+
 .PHONY: secrets-check
 secrets-check: ## Verify nothing under secrets/ is tracked by git
 	@leaked=$$(git ls-files secrets/ | grep -v -E '^secrets/(README.md|.gitignore|example/)' || true); \

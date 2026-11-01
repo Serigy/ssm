@@ -4,23 +4,9 @@ Gestão financeira, de pessoas e jurídica da Serigy Tecnologia e Marketing.
 Três módulos independentes sobre uma arquitetura de microsserviços em NestJS,
 com micro-frontends federados em React.
 
-```
-┌─ Navegador ─────────────────────────────────┐
-│  shell  ──carrega em runtime──▶  Financeiro │
-│                                  Pessoas    │
-│                                  Jurídico   │
-│                                  Operações  │
-└──────────────────┬──────────────────────────┘
-                   │ /api
-┌──────────────────▼──────────────────────────┐
-│  gateway                                    │
-├─────────────────────────────────────────────┤
-│ identity  financial   hr      legal    ops  │
-│ Postgres  Postgres  Postgres  MongoDB  Postgres│
-│         └──── RabbitMQ ────┘                │
-│              R2 (documentos)                │
-└─────────────────────────────────────────────┘
-```
+![Arquitetura do SSM: navegador, gateway, serviços, bancos e fila](docs/diagrams/arquitetura.svg)
+
+A fonte do diagrama está em [docs/diagrams/arquitetura.puml](docs/diagrams/arquitetura.puml).
 
 ## Começar
 
