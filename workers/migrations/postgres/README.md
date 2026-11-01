@@ -1,13 +1,13 @@
 # Migrações Postgres (Neon)
 
-ADR 0014. Uma pasta por módulo, com o nome do schema: `identity/`, e as outras
-quatro quando saírem do D1. Os arquivos são escritos à mão e revisados.
+ADR 0014. Uma pasta por módulo, com o nome do schema: `identity/` e `hr/`, e as outras
+três quando saírem do D1. Os arquivos são escritos à mão e revisados.
 `workers/migrations/<módulo>/` (sem `postgres/`) continua sendo o D1.
 
 | Ambiente | Conexão no `usql` | Arquivo local |
 |---|---|---|
 | dev | `ssm_development` | `secrets/local/neon_development_url` (dono, endpoint direto) |
-| dev, por módulo | — | `secrets/local/neon_identity_url` (papel `ssm_identity`) |
+| dev, por módulo | — | `secrets/local/neon_<módulo>_url` (papel `ssm_<módulo>`) |
 
 ## Local
 
@@ -16,12 +16,13 @@ quatro quando saírem do D1. Os arquivos são escritos à mão e revisados.
 node workers/migrations/postgres/roles.mjs \
   --url-file secrets/local/neon_development_url \
   --role-url-file identity=secrets/local/neon_identity_url identity
+# (um módulo por chamada com --role-url-file; repita para hr)
 
 # 2. o esquema
 node workers/migrations/postgres/apply.mjs --url-file secrets/local/neon_development_url
 
 # 3. dados de demonstração (usa o papel do módulo)
-pnpm --filter @ssm/worker-seed seed identity
+pnpm --filter @ssm/worker-seed seed identity   # ou hr
 
 # 4. conexão do wrangler dev
 ./scripts/cf-devvars.sh
@@ -40,6 +41,6 @@ arquivos. Nenhum dos scripts imprime URL ou senha.
 
 ## Hyperdrive de hmg e prd
 
-Ainda não existe. `workers/identity/wrangler.jsonc` traz `PENDENTE-CRIAR-HYPERDRIVE-*`
+Ainda não existem. `workers/identity/wrangler.jsonc` e `workers/hr/wrangler.jsonc` trazem `PENDENTE-CRIAR-HYPERDRIVE-*`
 nesses dois ambientes, e o deploy deles fica impedido até os ids existirem. Cada
 configuração usa o papel do módulo, não o dono.
