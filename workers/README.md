@@ -60,18 +60,26 @@ por fora enquanto o `workerd` o segura devolve `SQLITE_BUSY` e derruba o
 runtime inteiro. A ferramenta de semente confere a porta e recusa, mas a ordem
 é: parar, semear, subir.
 
-## Banco: D1 e Neon durante a transição
+## Banco: Neon
 
-O ADR 0014 troca o D1 pelo Neon, um módulo por vez. **identity, hr, operations e financial já estão no Neon**;
-legal e o gateway seguem no D1 (`env.DB`).
+O ADR 0014 trocou o D1 pelo Neon. **Os cinco módulos estão no Neon**; o gateway
+não guarda nada. Nenhum Worker declara `d1_databases` nem lê `env.DB`.
 
-- `workers/shared/src/database.ts` dá ao código o mesmo subconjunto do D1
-  (`prepare/bind/first/all/run` e `batch`) sobre Postgres, via Hyperdrive. O
-  módulo liga isso com `createApp(base, { postgres: true })` e lê `c.get('db')`.
-- Migrações Postgres: `workers/migrations/postgres/` (ver o README de lá).
+- `workers/shared/src/database.ts` dá ao código o subconjunto do D1 que ele usava
+  (`prepare/bind/first/all/run` e `batch`) sobre Postgres, via Hyperdrive, mais
+  `transaction()` para ler-decidir-escrever na mesma conexão. O módulo liga isso
+  com `createApp(base, { postgres: true })` e lê `c.get('db')`; cron e fila abrem
+  a própria conexão com `openFromBinding` e a fecham no `finally`.
+- `workers/shared/src/outbox.ts`: o evento do outbox sai do mesmo comando da
+  mudança (`UPDATE … RETURNING` num CTE alimentando o `INSERT`), então quem perde
+  a corrida não deixa evento fantasma.
+- Migrações: `workers/migrations/postgres/` (ver o README de lá). As SQL antigas do
+  D1 em `workers/migrations/<módulo>/` ficam como referência para a carga dos dados.
 - Em dev, o `wrangler dev` conecta direto no Neon de desenvolvimento pelo
   `.env` que `scripts/cf-devvars.sh` gera (o `.dev.vars` não serve para isso).
-- hmg e prd do identity e do hr dependem de Hyperdrives que ainda não foram criados.
+- hmg e prd dependem de Hyperdrives que ainda não foram criados: os cinco
+  `wrangler.jsonc` trazem `PENDENTE-CRIAR-HYPERDRIVE-*` e o deploy desses
+  ambientes está impedido até os ids existirem.
 
 ## Decisões fechadas por medição
 

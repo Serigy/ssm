@@ -2,9 +2,11 @@ import type { Clause, Contract, ContractStatus, CreateContract, UpdateContract }
 import {
   HttpProblem,
   documentPrefix,
+  eventStatement,
   highestNumber,
   withReservedNumber,
   type BaseBindings,
+  type Database,
 } from '@ssm/worker-common';
 import { findContractRow, toDto, type ContractRow } from './queries.js';
 
@@ -30,13 +32,14 @@ const now = () => new Date().toISOString();
 
 export async function createContract(
   env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   dto: CreateContract,
 ): Promise<Contract> {
   const year = new Date().getUTCFullYear();
   const prefix = `${dto.kind.toUpperCase().slice(0, 3)}-${year}-`;
-  const seed = await highestNumber(env.DB, 'contracts', 'reference', tenantId, prefix);
+  const seed = await highestNumber(db, 'contracts', 'reference', tenantId, prefix);
   const id = crypto.randomUUID();
 
   return withReservedNumber(env, tenantId, `contracts:${dto.kind}:${year}`, seed, async (value) => {
@@ -46,13 +49,13 @@ export async function createContract(
     // referenciadas por obrigação e por cláusula.
     const parties = dto.parties.map((p) => ({ ...p, id: crypto.randomUUID() }));
 
-    await env.DB.prepare(
+    await db.prepare(
       `INSERT INTO contracts (
          id, tenant_id, reference, title, kind, status, parties, governing_law,
          jurisdiction, effective_from, effective_to, renewal_notice_days,
          auto_renew, value_minor, value_currency, tags, current_version,
          created_by, updated_by
-       ) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, 'draft', ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, 1, ?, ?)`,
     )
       .bind(
         id,
@@ -66,7 +69,7 @@ export async function createContract(
         dto.effectiveFrom ?? null,
         dto.effectiveTo ?? null,
         dto.renewalNoticeDays ?? 30,
-        dto.autoRenew ? 1 : 0,
+        dto.autoRenew ?? false,
         dto.value?.amountMinor ?? null,
         dto.value?.currency ?? null,
         JSON.stringify(dto.tags ?? []),
@@ -75,35 +78,38 @@ export async function createContract(
       )
       .run();
 
-    return toDto((await findContractRow(env.DB, tenantId, id))!);
+    return toDto((await findContractRow(db, tenantId, id))!);
   });
 }
 
 export async function updateContract(
-  env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   id: string,
   dto: UpdateContract,
 ): Promise<Contract> {
-  const row = await mustFind(env, tenantId, id);
+  const row = await mustFind(db, tenantId, id);
   if (SEALED.includes(row.status as ContractStatus)) {
     throw HttpProblem.conflict(
       `Um contrato "${row.status}" não pode ser editado. Registre um aditivo com POST /:id/amend.`,
     );
   }
 
-  const parties = dto.parties
-    ? JSON.stringify(dto.parties.map((p) => ({ ...p, id: crypto.randomUUID() })))
-    : row.parties;
+  const parties = JSON.stringify(
+    dto.parties ? dto.parties.map((p) => ({ ...p, id: crypto.randomUUID() })) : row.parties,
+  );
 
-  await env.DB.prepare(
+  // `status NOT IN (selados)` na própria condição: se o contrato foi assinado
+  // entre a leitura e a escrita, o texto passou a ser o acordo e esta edição
+  // não pode mais valer.
+  const updated = await db.prepare(
     `UPDATE contracts
-        SET title = ?, kind = ?, parties = ?, governing_law = ?, jurisdiction = ?,
+        SET title = ?, kind = ?, parties = ?::jsonb, governing_law = ?, jurisdiction = ?,
             effective_from = ?, effective_to = ?, renewal_notice_days = ?,
-            auto_renew = ?, value_minor = ?, value_currency = ?, tags = ?,
+            auto_renew = ?, value_minor = ?, value_currency = ?, tags = ?::jsonb,
             updated_by = ?, updated_at = ?
-      WHERE id = ? AND tenant_id = ?`,
+      WHERE tenant_id = ? AND id = ? AND status NOT IN ('active','expired','terminated')`,
   )
     .bind(
       dto.title ?? row.title,
@@ -114,18 +120,23 @@ export async function updateContract(
       dto.effectiveFrom ?? row.effective_from,
       dto.effectiveTo ?? row.effective_to,
       dto.renewalNoticeDays ?? row.renewal_notice_days,
-      dto.autoRenew === undefined ? row.auto_renew : dto.autoRenew ? 1 : 0,
+      dto.autoRenew ?? row.auto_renew,
       dto.value?.amountMinor ?? row.value_minor,
       dto.value?.currency ?? row.value_currency,
-      dto.tags ? JSON.stringify(dto.tags) : row.tags,
+      JSON.stringify(dto.tags ?? row.tags),
       actorId,
       now(),
-      id,
       tenantId,
+      id,
     )
     .run();
+  if (updated.meta.changes === 0) {
+    throw HttpProblem.conflict(
+      'O contrato foi assinado ou encerrado enquanto era editado. Registre um aditivo.',
+    );
+  }
 
-  return toDto(await mustFind(env, tenantId, id));
+  return toDto(await mustFind(db, tenantId, id));
 }
 
 /**
@@ -138,56 +149,65 @@ export async function updateContract(
  * a cada leitura de contrato seria pago em toda tela de detalhe.
  */
 export async function amendContract(
-  env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   id: string,
   clauses: Clause[],
   note: string | undefined,
 ): Promise<Contract> {
-  const row = await mustFind(env, tenantId, id);
+  const row = await mustFind(db, tenantId, id);
 
-  const [updated] = await env.DB.batch([
-    // A chave primária é (contract_id, version), então a própria tabela recusa
-    // duas versões com o mesmo número — o batch inteiro falha antes de o
-    // contrato avançar.
-    env.DB.prepare(
-      `INSERT INTO contract_versions (contract_id, version, created_at, created_by, note, document_key, clauses)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(
-      id,
-      row.current_version,
-      now(),
-      actorId,
-      note ?? null,
-      row.document_key,
-      row.clauses,
-    ),
-    env.DB.prepare(
-      `UPDATE contracts
-          SET clauses = ?, current_version = current_version + 1, updated_by = ?, updated_at = ?
-        WHERE id = ? AND tenant_id = ? AND current_version = ?`,
-    ).bind(JSON.stringify(clauses), actorId, now(), id, tenantId, row.current_version),
-  ]);
+  // Uma transação: o contrato avança e a versão anterior vai para o histórico
+  // juntos. O UPDATE vem PRIMEIRO e é o CAS pela versão corrente — dois
+  // aditivos simultâneos não podem virar duas versões com o mesmo número, e o
+  // perdedor lança antes de gravar histórico (a chave primária
+  // (contract_id, version) é a segunda trava). Num `batch()` do D1 o INSERT do
+  // histórico vinha antes e o perdedor estourava na chave primária com um 500,
+  // em vez do 409.
+  await db.transaction(async (tx) => {
+    const updated = await tx
+      .prepare(
+        `UPDATE contracts
+            SET clauses = ?::jsonb, current_version = current_version + 1,
+                updated_by = ?, updated_at = ?
+          WHERE tenant_id = ? AND id = ? AND current_version = ?`,
+      )
+      .bind(JSON.stringify(clauses), actorId, now(), tenantId, id, row.current_version)
+      .run();
+    if (updated.meta.changes === 0) {
+      throw HttpProblem.conflict('O contrato recebeu outro aditivo enquanto este era registrado.');
+    }
 
-  // A versão corrente é a condição da escrita: dois aditivos simultâneos não
-  // podem virar duas versões com o mesmo número.
-  if (!updated || updated.meta.changes === 0) {
-    throw HttpProblem.conflict('O contrato recebeu outro aditivo enquanto este era registrado.');
-  }
+    await tx
+      .prepare(
+        `INSERT INTO contract_versions (contract_id, version, created_at, created_by, note, document_key, clauses)
+         VALUES (?, ?, ?, ?, ?, ?, ?::jsonb)`,
+      )
+      .bind(
+        id,
+        row.current_version,
+        now(),
+        actorId,
+        note ?? null,
+        row.document_key,
+        JSON.stringify(row.clauses),
+      )
+      .run();
+  });
 
-  return toDto(await mustFind(env, tenantId, id));
+  return toDto(await mustFind(db, tenantId, id));
 }
 
 export async function transitionContract(
-  env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   id: string,
   to: ContractStatus,
   correlationId: string,
 ): Promise<Contract> {
-  const row = await mustFind(env, tenantId, id);
+  const row = await mustFind(db, tenantId, id);
   const from = row.status as ContractStatus;
 
   if (!TRANSITIONS[from].includes(to)) {
@@ -203,36 +223,43 @@ export async function transitionContract(
     );
   }
 
-  const [updated] = await env.DB.batch([
-    env.DB.prepare(
-      `UPDATE contracts SET status = ?, updated_by = ?, updated_at = ?
-        WHERE id = ? AND tenant_id = ? AND status = ?`,
-    ).bind(to, actorId, now(), id, tenantId, from),
-    outboxInsert(env, {
+  // Mudança de situação e evento num comando só: se outra pessoa mudou a
+  // situação entre a leitura e a escrita, o UPDATE não move linha e nenhum
+  // evento `legal.contract.<situação>` é gravado.
+  const updated = await eventStatement(
+    db,
+    `moved AS (
+       UPDATE contracts SET status = ?, updated_by = ?, updated_at = ?
+        WHERE tenant_id = ? AND id = ? AND status = ?
+        RETURNING id)`,
+    [to, actorId, now(), tenantId, id, from],
+    {
+      aggregateType: 'contract',
       aggregateId: id,
       type: `legal.contract.${to}`,
       tenantId,
       actorId,
       correlationId,
       payload: { contractId: id, reference: row.reference, from, to },
-    }),
-  ]);
+    },
+  ).run();
 
-  if (!updated || updated.meta.changes === 0) {
+  if (updated.meta.changes === 0) {
     throw HttpProblem.conflict('A situação do contrato mudou enquanto era alterada.');
   }
 
-  return toDto(await mustFind(env, tenantId, id));
+  return toDto(await mustFind(db, tenantId, id));
 }
 
 export async function attachDocument(
   env: BaseBindings,
+  db: Database,
   tenantId: string,
   actorId: string,
   id: string,
   key: string,
 ): Promise<Contract> {
-  await mustFind(env, tenantId, id);
+  await mustFind(db, tenantId, id);
 
   // A chave é conferida contra o prefixo do contrato: aceitar qualquer chave
   // deixaria um cliente apontar o contrato para o documento de outro.
@@ -246,13 +273,14 @@ export async function attachDocument(
     throw HttpProblem.badRequest('Nenhum arquivo foi encontrado com essa chave. O envio concluiu?');
   }
 
-  await env.DB.prepare(
-    'UPDATE contracts SET document_key = ?, updated_by = ?, updated_at = ? WHERE id = ? AND tenant_id = ?',
-  )
-    .bind(key, actorId, now(), id, tenantId)
+  await db
+    .prepare(
+      'UPDATE contracts SET document_key = ?, updated_by = ?, updated_at = ? WHERE tenant_id = ? AND id = ?',
+    )
+    .bind(key, actorId, now(), tenantId, id)
     .run();
 
-  return toDto(await mustFind(env, tenantId, id));
+  return toDto(await mustFind(db, tenantId, id));
 }
 
 /**
@@ -262,34 +290,51 @@ export async function attachDocument(
  * saiu, e não um booleano: uma renovação que empurra a data rearma o alerta
  * sozinha, sem ninguém lembrar de limpar a marca.
  */
-export async function noticeExpiring(env: BaseBindings): Promise<number> {
-  const { results } = await env.DB.prepare(
-    `SELECT id, tenant_id, reference, effective_to,
-            CAST(julianday(effective_to) - julianday('now') AS INTEGER) AS days_remaining
-       FROM contracts
-      WHERE status = 'active'
-        AND effective_to IS NOT NULL
-        AND effective_to >= date('now')
-        AND julianday(effective_to) - julianday('now') <= renewal_notice_days
-        AND (expiry_notice_sent_for IS NULL OR expiry_notice_sent_for <> effective_to)
-      LIMIT 200`,
-  ).all<{
-    id: string;
-    tenant_id: string;
-    reference: string;
-    effective_to: string;
-    days_remaining: number;
-  }>();
+export async function noticeExpiring(db: Database): Promise<number> {
+  // Varre todos os tenants de propósito: é a rotina periódica da tabela, sem
+  // requisição e sem tenant. Cada escrita abaixo, porém, é escopada por
+  // tenant_id e id.
+  //
+  // `effective_to - current_date` são dias inteiros (date - date). A versão do
+  // D1 truncava a diferença de julianday contra o instante atual, e dava um dia
+  // a menos conforme a hora da varredura.
+  const { results } = await db
+    .prepare(
+      `SELECT id, tenant_id, reference, effective_to,
+              (effective_to - current_date) AS days_remaining
+         FROM contracts
+        WHERE status = 'active'
+          AND effective_to IS NOT NULL
+          AND effective_to >= current_date
+          AND (effective_to - current_date) <= renewal_notice_days
+          AND (expiry_notice_sent_for IS NULL OR expiry_notice_sent_for <> effective_to)
+        LIMIT 200`,
+    )
+    .all<{
+      id: string;
+      tenant_id: string;
+      reference: string;
+      effective_to: string;
+      days_remaining: number;
+    }>();
 
+  let noticed = 0;
   for (const c of results) {
-    // A marca e o evento no mesmo batch: gravar a marca sem enfileirar o evento
+    // A marca e o evento são UM comando: gravar a marca sem enfileirar o evento
     // faria o aviso ser perdido para sempre, já que a condição acima deixa de
-    // casar na varredura seguinte.
-    await env.DB.batch([
-      env.DB.prepare(
-        `UPDATE contracts SET expiry_notice_sent_for = ? WHERE id = ? AND tenant_id = ?`,
-      ).bind(c.effective_to, c.id, c.tenant_id),
-      outboxInsert(env, {
+    // casar na varredura seguinte. E a marca é condicional — duas varreduras
+    // simultâneas não geram dois avisos: quem perde não move linha e não grava
+    // evento.
+    const sent = await eventStatement(
+      db,
+      `moved AS (
+         UPDATE contracts SET expiry_notice_sent_for = ?
+          WHERE tenant_id = ? AND id = ? AND status = 'active'
+            AND (expiry_notice_sent_for IS NULL OR expiry_notice_sent_for <> ?)
+          RETURNING id)`,
+      [c.effective_to, c.tenant_id, c.id, c.effective_to],
+      {
+        aggregateType: 'contract',
         aggregateId: c.id,
         type: 'legal.contract.expiring',
         tenantId: c.tenant_id,
@@ -301,40 +346,16 @@ export async function noticeExpiring(env: BaseBindings): Promise<number> {
           expiresOn: c.effective_to,
           daysRemaining: c.days_remaining,
         },
-      }),
-    ]);
+      },
+    ).run();
+    noticed += sent.meta.changes;
   }
-  return results.length;
+  return noticed;
 }
 
-async function mustFind(env: BaseBindings, tenantId: string, id: string): Promise<ContractRow> {
-  const row = await findContractRow(env.DB, tenantId, id);
+async function mustFind(db: Database, tenantId: string, id: string): Promise<ContractRow> {
+  const row = await findContractRow(db, tenantId, id);
   // Mesmo 404 para "não existe" e "é de outro cliente".
   if (!row) throw HttpProblem.notFound(`Contrato ${id} não encontrado.`);
   return row;
-}
-
-interface OutboxEvent {
-  aggregateId: string;
-  type: string;
-  tenantId: string;
-  actorId: string | null;
-  correlationId: string;
-  payload: Record<string, unknown>;
-}
-
-function outboxInsert(env: BaseBindings, event: OutboxEvent): D1PreparedStatement {
-  return env.DB.prepare(
-    `INSERT INTO outbox (id, aggregate_type, aggregate_id, type, payload,
-                         tenant_id, actor_id, correlation_id)
-     VALUES (?, 'contract', ?, ?, ?, ?, ?, ?)`,
-  ).bind(
-    crypto.randomUUID(),
-    event.aggregateId,
-    event.type,
-    JSON.stringify(event.payload),
-    event.tenantId,
-    event.actorId,
-    event.correlationId,
-  );
 }

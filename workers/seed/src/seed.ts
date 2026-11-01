@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Semeadura do D1 — e, para o módulo identity, do Neon (ADR 0014).
+ * Semeadura do Neon de desenvolvimento (ADR 0014).
  *
  * Gera SQL e o aplica com `wrangler d1 execute`. Gerar o arquivo em vez de
  * inserir direto tem duas razões: o mesmo SQL serve para local e para
@@ -179,25 +179,26 @@ function legalSql(): string {
   return (
     header('legal') +
     [
-      'DELETE FROM contract_versions;',
-      'DELETE FROM contracts;',
-      `INSERT INTO contracts (id, tenant_id, reference, title, kind, status, parties,
+      'DELETE FROM legal.outbox;',
+      'DELETE FROM legal.contract_versions;',
+      'DELETE FROM legal.contracts;',
+      `INSERT INTO legal.contracts (id, tenant_id, reference, title, kind, status, parties,
          governing_law, jurisdiction, effective_from, effective_to, renewal_notice_days,
          auto_renew, value_minor, value_currency, risk, tags, current_version,
          clauses, obligations, created_by, updated_by)
        VALUES ('c0000000-0000-4000-8000-000000000001', ${q(TENANT)}, 'SER-2026-0001',
          'Sustentação de infraestrutura — Prefeitura de Aracaju', 'service_agreement', 'active',
          ${q(JSON.stringify(partiesA))}, 'Lei nº 14.133/2021', 'Aracaju, SE',
-         '2026-01-01', ${q(soon)}, 30, 0, 15000000, 'BRL', 'medium',
+         '2026-01-01', ${q(soon)}, 30, false, 15000000, 'BRL', 'medium',
          ${q(JSON.stringify(['sustentação', 'setor público']))}, 1,
          ${q(JSON.stringify(clauses))}, ${q(JSON.stringify(obligations))},
          ${q(USERS.counsel)}, ${q(USERS.counsel)});`,
-      `INSERT INTO contracts (id, tenant_id, reference, title, kind, status, parties,
+      `INSERT INTO legal.contracts (id, tenant_id, reference, title, kind, status, parties,
          governing_law, jurisdiction, renewal_notice_days, auto_renew, risk, tags,
          current_version, clauses, obligations, created_by, updated_by)
        VALUES ('c0000000-0000-4000-8000-000000000002', ${q(TENANT)}, 'NDA-2026-0001',
          'Acordo de confidencialidade — Grupo Sergipe Varejo', 'nda', 'in_review',
-         ${q(JSON.stringify(partiesB))}, 'Código Civil', 'Aracaju, SE', 30, 0, 'low',
+         ${q(JSON.stringify(partiesB))}, 'Código Civil', 'Aracaju, SE', 30, false, 'low',
          ${q(JSON.stringify(['confidencialidade']))}, 1, '[]', '[]',
          ${q(USERS.counsel)}, ${q(USERS.counsel)});`,
     ].join('\n') +
@@ -346,7 +347,7 @@ if (target === 'identity' && (remote || envName !== 'dev')) {
 
 // Módulos já no Neon (ADR 0014). A semente só alcança o Neon de desenvolvimento,
 // com o papel do próprio módulo; hmg e prd não são alvo desta ferramenta.
-const NEON_MODULES = ['identity', 'hr', 'operations', 'financial'];
+const NEON_MODULES = ['identity', 'hr', 'operations', 'financial', 'legal'];
 if (NEON_MODULES.includes(target) && (remote || envName !== 'dev')) {
   console.error(`${target} está no Neon; a semente só grava no banco de desenvolvimento. Recusado.`);
   process.exit(1);

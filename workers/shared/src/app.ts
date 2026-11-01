@@ -121,19 +121,11 @@ export function createApp(basePath?: string, options: { postgres?: boolean } = {
   const health = async (c: Context<AppEnv>) => {
     const checks: Record<string, 'up' | 'down'> = {};
 
-    // Só se pergunta pelo que o Worker realmente tem. O gateway não declara D1
-    // — ele não guarda nada — e a versão anterior o deixava permanentemente
+    // Só se pergunta pelo que o Worker realmente tem. O gateway não guarda
+    // nada e não declara banco — a versão anterior o deixava permanentemente
     // "unavailable" por causa de um banco que ele nunca deveria ter. Uma sonda
     // que reprova um serviço saudável é pior que sonda nenhuma: ela impede o
     // deploy e ensina a ignorar o alarme.
-    if (c.env.DB) {
-      try {
-        await c.env.DB.prepare('SELECT 1').first();
-        checks.d1 = 'up';
-      } catch {
-        checks.d1 = 'down';
-      }
-    }
     // Módulo no Postgres: a conexão da requisição, aberta pelo middleware.
     if (options.postgres) {
       try {

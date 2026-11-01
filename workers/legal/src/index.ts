@@ -20,6 +20,8 @@ import {
   type AppEnv,
   captureUnexpected,
   withMonitoring,
+  openFromBinding,
+  type Database,
 } from '@ssm/worker-common';
 import { z } from 'zod';
 import {
@@ -32,7 +34,8 @@ import {
 } from './commands.js';
 import { findContractRow, listContracts, toDto } from './queries.js';
 
-const app = createApp('/api/legal');
+// Jurídico já está no Neon (ADR 0014): `postgres` abre a conexão da requisição.
+const app = createApp('/api/legal', { postgres: true });
 const BASE = '/api/legal/v1/contracts';
 
 app.get(BASE, requireAuth(), requirePermissions('legal:contract:read'), async (c) => {
@@ -40,7 +43,7 @@ app.get(BASE, requireAuth(), requirePermissions('legal:contract:read'), async (c
     contractFilterSchema.merge(pageQuerySchema),
     Object.fromEntries(new URL(c.req.url).searchParams),
   );
-  const { rows, nextCursor } = await listContracts(c.env.DB, c.get('actor').tenantId, filter, {
+  const { rows, nextCursor } = await listContracts(c.get('db'), c.get('actor').tenantId, filter, {
     limit,
     cursor,
     sort,
@@ -63,7 +66,7 @@ app.get(`${BASE}/expiring`, requireAuth(), requirePermissions('legal:contract:re
     throw HttpProblem.badRequest('withinDays deve ser um inteiro entre 1 e 365.');
   }
   const { rows } = await listContracts(
-    c.env.DB,
+    c.get('db'),
     c.get('actor').tenantId,
     { expiringWithinDays: withinDays },
     { limit: 200, sort: undefined, cursor: undefined },
@@ -74,7 +77,7 @@ app.get(`${BASE}/expiring`, requireAuth(), requirePermissions('legal:contract:re
 });
 
 app.get(`${BASE}/:id`, requireAuth(), requirePermissions('legal:contract:read'), async (c) => {
-  const row = await findContractRow(c.env.DB, c.get('actor').tenantId, c.req.param('id'));
+  const row = await findContractRow(c.get('db'), c.get('actor').tenantId, c.req.param('id'));
   if (!row) throw HttpProblem.notFound(`Contrato ${c.req.param('id')} não encontrado.`);
   return c.json(toDto(row));
 });
@@ -82,7 +85,7 @@ app.get(`${BASE}/:id`, requireAuth(), requirePermissions('legal:contract:read'),
 app.post(BASE, requireAuth(), requirePermissions('legal:contract:create'), async (c) => {
   const dto = parse(createContractSchema, await c.req.json().catch(() => null));
   const actor = c.get('actor');
-  const contract = await createContract(c.env, actor.tenantId, actor.id, dto);
+  const contract = await createContract(c.env, c.get('db'), actor.tenantId, actor.id, dto);
   c.header('Location', `${BASE}/${contract.id}`);
   return c.json(contract, 201);
 });
@@ -90,7 +93,7 @@ app.post(BASE, requireAuth(), requirePermissions('legal:contract:create'), async
 app.patch(`${BASE}/:id`, requireAuth(), requirePermissions('legal:contract:update'), async (c) => {
   const dto = parse(updateContractSchema, await c.req.json().catch(() => null));
   const actor = c.get('actor');
-  return c.json(await updateContract(c.env, actor.tenantId, actor.id, c.req.param('id'), dto));
+  return c.json(await updateContract(c.get('db'), actor.tenantId, actor.id, c.req.param('id'), dto));
 });
 
 app.post(
@@ -102,7 +105,7 @@ app.post(
     const dto = parse(amendContractSchema, await c.req.json().catch(() => null));
     const actor = c.get('actor');
     return c.json(
-      await amendContract(c.env, actor.tenantId, actor.id, c.req.param('id'), dto.clauses, dto.note),
+      await amendContract(c.get('db'), actor.tenantId, actor.id, c.req.param('id'), dto.clauses, dto.note),
     );
   },
 );
@@ -117,7 +120,7 @@ app.post(
     const actor = c.get('actor');
     return c.json(
       await transitionContract(
-        c.env,
+        c.get('db'),
         actor.tenantId,
         actor.id,
         c.req.param('id'),
@@ -139,7 +142,7 @@ app.post(
     // Confere que o contrato existe e é deste cliente ANTES de assinar: um
     // bilhete assinado é permissão de escrita no balde, e não se emite permissão
     // para um caminho que ninguém verificou.
-    if (!(await findContractRow(c.env.DB, actor.tenantId, id))) {
+    if (!(await findContractRow(c.get('db'), actor.tenantId, id))) {
       throw HttpProblem.notFound(`Contrato ${id} não encontrado.`);
     }
     return c.json(
@@ -155,7 +158,7 @@ app.post(
   async (c) => {
     const dto = parse(attachDocumentSchema, await c.req.json().catch(() => null));
     const actor = c.get('actor');
-    return c.json(await attachDocument(c.env, actor.tenantId, actor.id, c.req.param('id'), dto.key));
+    return c.json(await attachDocument(c.env, c.get('db'), actor.tenantId, actor.id, c.req.param('id'), dto.key));
   },
 );
 
@@ -164,7 +167,7 @@ app.get(
   requireAuth(),
   requirePermissions('legal:contract:read'),
   async (c) => {
-    const row = await findContractRow(c.env.DB, c.get('actor').tenantId, c.req.param('id'));
+    const row = await findContractRow(c.get('db'), c.get('actor').tenantId, c.req.param('id'));
     if (!row) throw HttpProblem.notFound(`Contrato ${c.req.param('id')} não encontrado.`);
     if (!row.document_key) {
       throw HttpProblem.notFound('Este contrato ainda não tem documento anexado.');
@@ -187,11 +190,16 @@ export default withMonitoring({
   fetch: app.fetch,
 
   async scheduled(_c: ScheduledController, env: AppEnv['Bindings'], ctx: ExecutionContext) {
-    ctx.waitUntil(drainOutbox(env));
+    // Não passa pelo Hono, então abre e fecha a própria conexão — uma para as
+    // duas tarefas, fechada quando ambas terminam.
+    const db = openFromBinding(env.HYPERDRIVE);
     ctx.waitUntil(
-      noticeExpiring(env).then((n) => {
-        if (n) console.log(JSON.stringify({ event: 'legal.contract.expiring_noticed', count: n }));
-      }),
+      Promise.all([
+        drainOutbox(env, db),
+        noticeExpiring(db).then((n) => {
+          if (n) console.log(JSON.stringify({ event: 'legal.contract.expiring_noticed', count: n }));
+        }),
+      ]).finally(() => db.close()),
     );
   },
 
@@ -204,24 +212,31 @@ export default withMonitoring({
    * mesmo evento pode chegar duas vezes, e a segunda não pode duplicar nada.
    */
   async queue(batch: MessageBatch<QueueEvent>, env: AppEnv['Bindings']) {
-    for (const message of batch.messages) {
-      try {
-        await handleEvent(env, message.body);
-        message.ack();
-      } catch (err) {
-        console.error(
-          JSON.stringify({ event: 'legal.queue.failed', id: message.body?.id, err: String(err) }),
-        );
-        // Devolve para a fila; depois de max_retries vai para a DLQ em vez de
-        // sumir.
-        captureUnexpected(err, message.body?.correlationId ?? message.id);
-        message.retry();
+    // Uma conexão para o lote inteiro, fechada ao fim — o consumidor não passa
+    // pelo Hono, então ninguém mais a fecharia.
+    const db = openFromBinding(env.HYPERDRIVE);
+    try {
+      for (const message of batch.messages) {
+        try {
+          await handleEvent(db, message.body);
+          message.ack();
+        } catch (err) {
+          console.error(
+            JSON.stringify({ event: 'legal.queue.failed', id: message.body?.id, err: String(err) }),
+          );
+          // Devolve para a fila; depois de max_retries vai para a DLQ em vez de
+          // sumir.
+          captureUnexpected(err, message.body?.correlationId ?? message.id);
+          message.retry();
+        }
       }
+    } finally {
+      await db.close();
     }
   },
 } satisfies ExportedHandler<AppEnv['Bindings'], QueueEvent>);
 
-interface QueueEvent {
+export interface QueueEvent {
   id: string;
   type: string;
   data: Record<string, unknown>;
@@ -229,17 +244,37 @@ interface QueueEvent {
   correlationId: string;
 }
 
-async function handleEvent(env: AppEnv['Bindings'], event: QueueEvent): Promise<void> {
-  // A tabela de eventos já processados é o que torna o consumo idempotente. A
-  // chave é o id do evento, que o produtor gera uma vez e mantém entre
+/**
+ * A marca em processed_events e o EFEITO do evento são a mesma transação. A
+ * chave primária é a trava (`ON CONFLICT DO NOTHING`): quem consegue inserir
+ * processa, quem não consegue já foi processado. E se o efeito lança, a marca é
+ * desfeita junto — a reentrega (`message.retry()`) processa de novo, em vez de
+ * encontrar o evento "já processado" e perder o efeito para sempre. Marcar
+ * antes e executar depois, como era no D1, tinha exatamente esse buraco.
+ */
+export async function handleEvent(
+  db: Database,
+  event: QueueEvent,
+  effect: (tx: Database, event: QueueEvent) => Promise<void> = applyEffect,
+): Promise<'processed' | 'duplicate'> {
+  // A chave é o id do evento, que o produtor gera uma vez e mantém entre
   // reentregas.
-  const fresh = await env.DB.prepare(
-    'INSERT OR IGNORE INTO processed_events (event_id, type, processed_at) VALUES (?, ?, ?)',
-  )
-    .bind(event.id, event.type, new Date().toISOString())
-    .run();
-  if (fresh.meta.changes === 0) return;
+  return db.transaction(async (tx) => {
+    const fresh = await tx
+      .prepare(
+        `INSERT INTO processed_events (event_id, type, processed_at) VALUES (?, ?, ?)
+         ON CONFLICT (event_id) DO NOTHING`,
+      )
+      .bind(event.id, event.type, new Date().toISOString())
+      .run();
+    if (fresh.meta.changes === 0) return 'duplicate';
 
+    await effect(tx, event);
+    return 'processed';
+  });
+}
+
+async function applyEffect(tx: Database, event: QueueEvent): Promise<void> {
   if (event.type === 'hr.employee.offboarded') {
     // Marca para revisão os contratos que nomeiam a pessoa desligada. Não muda
     // situação de contrato sozinho: quem decide isso é o jurídico.
@@ -249,40 +284,44 @@ async function handleEvent(env: AppEnv['Bindings'], event: QueueEvent): Promise<
     // procurava `employeeId`, campo que a parte não tem — a consulta não dava
     // erro, simplesmente não casava com nada, e o efeito seria um recurso que
     // nunca dispara.
-    await env.DB.prepare(
-      `UPDATE contracts SET risk = 'high', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-        WHERE tenant_id = ?
-          AND status = 'active'
-          AND EXISTS (
-            SELECT 1 FROM json_each(contracts.parties)
-             WHERE json_extract(json_each.value, '$.externalRef') = ?
-          )`,
-    )
+    await tx
+      .prepare(
+        `UPDATE contracts SET risk = 'high', updated_at = now()
+          WHERE tenant_id = ?
+            AND status = 'active'
+            AND EXISTS (
+              SELECT 1 FROM jsonb_array_elements(contracts.parties) AS p
+               WHERE p ->> 'externalRef' = ?
+            )`,
+      )
       .bind(event.tenantId, String(event.data.employeeId))
       .run();
   }
 }
 
-async function drainOutbox(env: AppEnv['Bindings']): Promise<void> {
-  const { results } = await env.DB.prepare(
-    `SELECT id, type, payload, tenant_id, actor_id, correlation_id
-       FROM outbox WHERE published_at IS NULL AND attempts < 5
-      ORDER BY created_at LIMIT 50`,
-  ).all<{
-    id: string;
-    type: string;
-    payload: string;
-    tenant_id: string;
-    actor_id: string | null;
-    correlation_id: string;
-  }>();
+export async function drainOutbox(env: AppEnv['Bindings'], db: Database): Promise<void> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, type, payload, tenant_id, actor_id, correlation_id
+         FROM outbox WHERE published_at IS NULL AND attempts < 5
+        ORDER BY created_at LIMIT 50`,
+    )
+    .all<{
+      id: string;
+      type: string;
+      /** jsonb: o driver já devolve o objeto. */
+      payload: unknown;
+      tenant_id: string;
+      actor_id: string | null;
+      correlation_id: string;
+    }>();
 
   for (const row of results) {
     try {
       await env.QUEUE_FINANCIAL.send({
         id: row.id,
         type: row.type,
-        data: JSON.parse(row.payload),
+        data: row.payload,
         tenantId: row.tenant_id,
         actorId: row.actor_id,
         correlationId: row.correlation_id,
@@ -290,13 +329,10 @@ async function drainOutbox(env: AppEnv['Bindings']): Promise<void> {
         source: 'legal-worker',
         version: 1,
       });
-      await env.DB.prepare(
-        `UPDATE outbox SET published_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
-      )
-        .bind(row.id)
-        .run();
+      await db.prepare('UPDATE outbox SET published_at = now() WHERE id = ?').bind(row.id).run();
     } catch (err) {
-      await env.DB.prepare('UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?')
+      await db
+        .prepare('UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?')
         .bind(String(err).slice(0, 500), row.id)
         .run();
     }

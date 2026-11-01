@@ -10,21 +10,13 @@ import { z } from 'zod';
  */
 export interface BaseBindings {
   /**
-   * Banco SQLite do módulo. Um por contexto delimitado, como antes.
+   * Neon, via Hyperdrive (ADR 0014). Todo módulo usa — só o gateway não tem
+   * banco, e por isso o tipo é opcional. O módulo lê `c.get('db')`, aberto por
+   * `createApp(base, { postgres: true })`, ou abre o seu com `openFromBinding`
+   * (cron e fila).
    *
-   * Declarado obrigatório embora o gateway não tenha nenhum: ele é o único sem
-   * banco, e afrouxar o tipo obrigaria os cinco módulos a asserção de não-nulo
-   * em toda consulta para acomodar a exceção. A sonda de saúde em app.ts
-   * verifica a presença em tempo de execução, que é onde a diferença aparece —
-   * foi assim que o gateway ficou permanentemente "unavailable" por causa de um
-   * banco que ele nunca deveria ter.
-   */
-  DB: D1Database;
-
-  /**
-   * Neon, via Hyperdrive (ADR 0014). Presente só nos módulos já migrados —
-   * o Worker de identidade por ora —, que por isso não têm `DB`. O tipo de
-   * `DB` segue obrigatório pelo motivo acima; quem usa Postgres lê isto.
+   * O binding `DB` (D1) que existia aqui saiu com o último módulo: nenhum
+   * Worker o declara mais.
    */
   HYPERDRIVE?: Hyperdrive;
 
