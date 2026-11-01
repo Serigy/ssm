@@ -1,3 +1,4 @@
+import type { Database } from '@ssm/worker-common';
 import { money, type Contract, type ContractFilter, type PageQuery } from '@ssm/contracts';
 
 export interface ContractRow {
@@ -7,21 +8,26 @@ export interface ContractRow {
   title: string;
   kind: string;
   status: string;
-  parties: string;
+  /** jsonb: o driver já devolve o array/objeto, sem JSON.parse. */
+  parties: Contract['parties'];
   governing_law: string | null;
   jurisdiction: string | null;
+  /** date: texto AAAA-MM-DD. */
   effective_from: string | null;
   effective_to: string | null;
   renewal_notice_days: number;
-  auto_renew: number;
+  auto_renew: boolean;
+  /** bigint em menor unidade; a camada o devolve como número. */
   value_minor: number | null;
   value_currency: string | null;
   risk: string | null;
-  tags: string;
+  tags: string[];
   current_version: number;
-  clauses: string;
-  obligations: string;
+  clauses: Contract['clauses'];
+  obligations: Contract['obligations'];
   document_key: string | null;
+  /** date: a data de fim para a qual o aviso de vencimento já saiu. */
+  expiry_notice_sent_for: string | null;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -29,7 +35,7 @@ export interface ContractRow {
 }
 
 export async function listContracts(
-  db: D1Database,
+  db: Database,
   tenantId: string,
   filter: ContractFilter,
   page: PageQuery,
@@ -50,23 +56,27 @@ export async function listContracts(
     params.push(filter.risk);
   }
   if (filter.tag) {
-    // As etiquetas são um array JSON; `json_each` é o equivalente do `$in` do
-    // Mongo, e evita o `LIKE '%tag%'` que casaria "fiscal" dentro de
-    // "fiscalizacao".
-    where.push('EXISTS (SELECT 1 FROM json_each(c.tags) WHERE json_each.value = ?)');
-    params.push(filter.tag);
+    // As etiquetas são um array jsonb; `@>` (contém, com índice GIN) é o
+    // equivalente do `$in` do Mongo, e evita o `LIKE '%tag%'` que casaria
+    // "fiscal" dentro de "fiscalizacao". Não é o operador `?` do jsonb, que a
+    // camada tomaria por parâmetro.
+    where.push('c.tags @> ?::jsonb');
+    params.push(JSON.stringify([filter.tag]));
   }
   if (filter.expiringWithinDays) {
     where.push(
       `c.status = 'active' AND c.effective_to IS NOT NULL
-       AND c.effective_to >= date('now')
-       AND c.effective_to <= date('now', ?)`,
+       AND c.effective_to >= current_date
+       AND c.effective_to <= current_date + (?)::integer`,
     );
-    params.push(`+${filter.expiringWithinDays} days`);
+    params.push(filter.expiringWithinDays);
   }
   if (filter.q) {
-    where.push('c.rowid IN (SELECT rowid FROM contracts_fts WHERE contracts_fts MATCH ?)');
-    params.push(`${filter.q.replace(/["\s]+/g, ' ').trim()}*`);
+    const query = searchQuery(filter.q);
+    if (query) {
+      where.push(`c.search @@ to_tsquery('simple', ?)`);
+      params.push(query);
+    }
   }
   if (page.cursor) {
     const { createdAt, id } = decodeCursor(page.cursor);
@@ -91,13 +101,13 @@ export async function listContracts(
 }
 
 export async function findContractRow(
-  db: D1Database,
+  db: Database,
   tenantId: string,
   id: string,
 ): Promise<ContractRow | null> {
   return db
-    .prepare('SELECT * FROM contracts WHERE id = ? AND tenant_id = ?')
-    .bind(id, tenantId)
+    .prepare('SELECT * FROM contracts WHERE tenant_id = ? AND id = ?')
+    .bind(tenantId, id)
     .first<ContractRow>();
 }
 
@@ -109,27 +119,41 @@ export function toDto(r: ContractRow): Contract {
     title: r.title,
     kind: r.kind as Contract['kind'],
     status: r.status as Contract['status'],
-    parties: JSON.parse(r.parties) as Contract['parties'],
+    parties: r.parties,
     governingLaw: r.governing_law,
     jurisdiction: r.jurisdiction,
     effectiveFrom: r.effective_from,
     effectiveTo: r.effective_to,
     renewalNoticeDays: r.renewal_notice_days,
-    // SQLite não tem booleano: a coluna é 0 ou 1, e o CHECK garante que seja.
-    autoRenew: r.auto_renew === 1,
+    autoRenew: r.auto_renew,
     value:
       r.value_minor !== null && r.value_currency ? money(r.value_minor, r.value_currency) : null,
     risk: r.risk as Contract['risk'],
-    tags: JSON.parse(r.tags) as string[],
+    tags: r.tags,
     currentVersion: r.current_version,
-    clauses: JSON.parse(r.clauses) as Contract['clauses'],
-    obligations: JSON.parse(r.obligations) as Contract['obligations'],
+    clauses: r.clauses,
+    obligations: r.obligations,
     documentKey: r.document_key,
     createdAt: r.created_at,
     createdBy: r.created_by,
     updatedAt: r.updated_at,
     updatedBy: r.updated_by,
   };
+}
+
+/**
+ * Texto digitado -> tsquery de prefixo, na mesma dobra de acento da coluna
+ * `search`. Só letras e dígitos sobrevivem, então o valor não carrega operador
+ * de tsquery; ainda assim vai como parâmetro. null quando não sobra termo.
+ */
+export function searchQuery(input: string): string | null {
+  const terms = input
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  return terms.length ? terms.map((t) => `${t}:*`).join(' & ') : null;
 }
 
 export function encodeCursor(createdAt: string, id: string): string {

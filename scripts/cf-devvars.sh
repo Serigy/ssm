@@ -71,6 +71,7 @@ neon_env financial
 emit legal      JWT_PUBLIC_KEY=jwt_public_key.pem \
                 R2_ACCESS_KEY_ID=r2_access_key_id \
                 R2_SECRET_ACCESS_KEY=r2_secret_access_key
+neon_env legal
 emit operations JWT_PUBLIC_KEY=jwt_public_key.pem
 neon_env operations
 emit gateway    JWT_PUBLIC_KEY=jwt_public_key.pem
