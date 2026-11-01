@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { Badge, Card, Metric, Panel } from '@ssm/ui-kit';
 import { useHost, useQuery } from '@ssm/mfe-runtime';
 
+const BASE_URL = import.meta.env.VITE_API_URL ?? '';
+
 interface StatusResponse {
   status: string;
   env: string;
@@ -14,6 +16,7 @@ const MODULE_LABELS: Record<string, string> = {
   financial: 'Financeiro',
   hr: 'Pessoas',
   legal: 'Jurídico',
+  operations: 'Operações',
 };
 
 /**
@@ -24,7 +27,7 @@ const MODULE_LABELS: Record<string, string> = {
 export function Dashboard() {
   const { session, setPageTitle } = useHost();
   const { data, loading } = useQuery<StatusResponse>(
-    () => fetch('/api/v1/status').then((r) => r.json() as Promise<StatusResponse>),
+    () => fetch(`${BASE_URL}/api/v1/status`).then((r) => r.json() as Promise<StatusResponse>),
     [],
   );
 

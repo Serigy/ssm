@@ -28,7 +28,7 @@ com micro-frontends federados em React.
 make bootstrap    # confere ferramentas, gera segredos, instala dependências
 make dev          # sobe a infraestrutura e os serviços
 make seed         # dados de demonstração
-make web          # shell + 3 remotes com hot reload
+make web-docker   # shell + 4 remotes com hot reload, contra o gateway do compose
 ```
 
 `http://localhost:4200` — entre com `admin@serigy.local` /

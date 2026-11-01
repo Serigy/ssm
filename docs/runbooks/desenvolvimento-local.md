@@ -15,8 +15,12 @@ Depois:
 ```bash
 make dev     # sobe a infraestrutura e os cinco serviços em contêiner
 make seed    # carrega os dados de demonstração
-make web     # sobe shell + 3 remotes com hot reload
+make web-docker   # sobe shell + 4 remotes com hot reload, contra o gateway
 ```
+
+`make web` sobe os mesmos front-ends, mas o proxy do shell aponta para os
+Workers (`8800`–`8805`, `pnpm cf:dev`). Com a pilha em contêiner, use
+`make web-docker`, ou `make web-docker-start` para rodar em segundo plano.
 
 Abra `http://localhost:4200` e entre com `admin@serigy.local` /
 `serigy-desenvolvimento-2026`.
@@ -41,7 +45,7 @@ hora de confusão.
 
 ## O laço de trabalho
 
-**Front-end.** `make web` roda os quatro apps com HMR. Os serviços ficam nos
+**Front-end.** `make web-docker` roda os cinco apps com HMR. Os serviços ficam nos
 contêineres; só as telas recarregam.
 
 **Back-end.** Duas opções:
@@ -89,7 +93,7 @@ placeholders de R2 e Aikido nascem vazios de propósito — se um serviço recla
 deles, ele está tentando usar armazenamento e o MinIO não subiu.
 
 **O shell carrega mas um módulo mostra "Não foi possível carregar este módulo".**
-O remote não está no ar. Confira que `make web` subiu os quatro e que a porta do
+O remote não está no ar. Confira que `make web-docker` subiu os cinco e que a porta do
 módulo responde. O painel dos outros módulos continua funcionando — é o error
 boundary fazendo o trabalho dele.
 

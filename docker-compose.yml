@@ -36,7 +36,9 @@ x-service-base: &service-base
     REDIS_ENABLED: "true"
     R2_ENDPOINT: http://minio:9000
     R2_BUCKET: ssm-documents
-    JWT_ISSUER: http://localhost:3000
+    # Same value as the application default, dev-native.sh and mint-token, so a
+    # development token is accepted by the containers too.
+    JWT_ISSUER: https://identity.ssm.local
     JWT_AUDIENCE: ssm
     CORS_ORIGINS: http://localhost:4200,http://localhost:4201,http://localhost:4202,http://localhost:4203
     # Zen runs in report-only mode locally: it logs what it would have blocked
@@ -140,8 +142,14 @@ services:
 
   # Stands in for Cloudflare R2. Same S3 API, so ObjectStorageService takes the
   # identical code path locally and in production.
+  #
+  # Chainguard build because minio/minio and minio/mc can no longer be pulled
+  # from Docker Hub or quay.io. It ships minio, mc and a shell, so minio-init
+  # uses it too. Root because the named volume is created root-owned and the
+  # image's default user (65532) cannot write to it.
   minio:
-    image: minio/minio:latest
+    image: cgr.dev/chainguard/minio:latest
+    user: '0:0'
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ssm-local
@@ -159,7 +167,8 @@ services:
       retries: 10
 
   minio-init:
-    image: minio/mc:latest
+    image: cgr.dev/chainguard/minio:latest
+    user: '0:0'
     depends_on:
       minio: { condition: service_healthy }
     secrets: [minio_password]

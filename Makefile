@@ -11,6 +11,7 @@ KIND_CLUSTER?= ssm
 NAMESPACE   ?= ssm
 REGISTRY    ?= ssm
 TAG         ?= dev
+GATEWAY_URL ?= http://localhost:3000
 
 SERVICES    := gateway identity-svc financial-svc hr-svc legal-svc ops-svc
 WEBAPPS     := shell mfe-financial mfe-hr mfe-legal mfe-operations
@@ -62,11 +63,13 @@ dev: ## Build and start the whole stack
 	@echo "  rabbitmq    http://localhost:15672"
 	@echo "  minio       http://localhost:9001"
 	@echo
-	@echo "Suba os front-ends com 'make web'."
+	@echo "Suba os front-ends com 'make web-docker'."
 
-.PHONY: web
-web: ## Run shell + the three remotes with hot reload
+.PHONY: web web-docker
+web: ## Run shell + the remotes with hot reload, against the Workers
 	pnpm nx run-many -t serve -p shell mfe-financial mfe-hr mfe-legal mfe-operations --parallel=5
+web-docker: export SSM_API_GATEWAY = $(GATEWAY_URL)
+web-docker: web ## Run shell + the remotes with hot reload, against the compose gateway
 
 .PHONY: infra
 infra: ## Start only the datastores (postgres, mongo, rabbitmq, minio)
@@ -84,7 +87,7 @@ services-status: ## Readiness of the natively-run services
 up-native: infra build services ## Whole stack without building images (fastest inner loop)
 	@echo
 	@echo "  API      http://localhost:3000/api/v1/status"
-	@echo "  Agora rode 'make web' e abra http://localhost:4200"
+	@echo "  Agora rode 'make web-docker' e abra http://localhost:4200"
 
 .PHONY: up down restart logs ps
 up: ## Start the stack without rebuilding
@@ -178,9 +181,11 @@ e2e: ## End-to-end no navegador (exige a stack de pé: infra + services + web)
 e2e-ui: ## E2E em modo interativo
 	pnpm playwright test --ui
 
-.PHONY: web-start web-stop web-status
+.PHONY: web-start web-docker-start web-stop web-status
 web-start: ## Sobe os quatro dev servers em segundo plano
 	@./scripts/dev-web.sh start
+web-docker-start: export SSM_API_GATEWAY = $(GATEWAY_URL)
+web-docker-start: web-start ## Sobe os dev servers em segundo plano, contra o gateway do compose
 web-stop: ## Derruba os dev servers (mata pela porta, não pelo PID)
 	@./scripts/dev-web.sh stop
 web-status: ## Estado dos dev servers
